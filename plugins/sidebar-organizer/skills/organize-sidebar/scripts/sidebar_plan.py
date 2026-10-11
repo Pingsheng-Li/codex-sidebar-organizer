@@ -482,6 +482,72 @@ def verify(before, after, plan):
             "historyComplete": False, "uiPlacement": "unverified", "collapse": "unverified", "opening": "unverified"}
 
 
+def refresh_observation(snapshot):
+    """Project native list metadata only; absence is never deletion evidence."""
+    if not isinstance(snapshot, dict):
+        raise ValueError("Snapshot must be an object")
+    sidebar = snapshot.get("sidebar")
+    sources = availability(array(sidebar, "unavailableSources"), "source")
+    available = not sources.intersection({"chatgpt", "*"})
+    present = set()
+    for field in ("threads", "pinnedThreads"):
+        seen = set()
+        for row in array(sidebar, field):
+            if not isinstance(row, dict) or not stable(row.get("id")) or not stable(row.get("kind")):
+                raise ValueError("Invalid native chat identity")
+            if row["kind"] != "chatgpt":
+                continue
+            key = chat_key(row)
+            if key in seen:
+                raise ValueError("Duplicate native ChatGPT row")
+            seen.add(key)
+            present.add(key)
+    sections, memberships = set(), set()
+    for section in array(sidebar, "sections"):
+        if not isinstance(section, dict) or not stable(section.get("sectionId")):
+            raise ValueError("Invalid native section identity")
+        sid = section["sectionId"]
+        if sid in sections:
+            raise ValueError("Duplicate native section")
+        sections.add(sid)
+        seen = set()
+        for key in array(section, "itemKeys"):
+            if not stable(key) or key in seen:
+                raise ValueError("Invalid or duplicate native section key")
+            seen.add(key)
+            if key.startswith("chatgpt:conversation:"):
+                if not stable(key.removeprefix("chatgpt:conversation:")):
+                    raise ValueError("Empty ChatGPT conversation identity")
+                memberships.add((sid, key))
+    return {"sourceAvailable": available, "listedKeys": sorted(present),
+            "memberships": [list(pair) for pair in sorted(memberships)]}
+
+
+def refresh_check(snapshot, previous=None):
+    current = refresh_observation(snapshot)
+    prior = refresh_observation(previous) if previous is not None else None
+    listed = set(current["listedKeys"])
+    referenced = {key for _, key in current["memberships"]}
+    unlisted = sorted(referenced - listed)
+    comparable = prior is not None and prior["sourceAvailable"] and current["sourceAvailable"]
+    old_memberships = {tuple(pair) for pair in prior["memberships"]} if comparable else set()
+    current_memberships = {tuple(pair) for pair in current["memberships"]}
+    old_unlisted = ({key for _, key in prior["memberships"]} - set(prior["listedKeys"])) if comparable else set()
+    return {"schemaVersion": 1, "mode": "refresh_check",
+            "status": "observed" if current["sourceAvailable"] else "source_unavailable",
+            "observation": current,
+            "changed": current != prior if prior is not None else None,
+            "comparisonAvailable": comparable,
+            "listedChatCount": len(listed), "referencedChatCount": len(referenced),
+            "unlistedReferences": unlisted if current["sourceAvailable"] else [],
+            "newUnlistedReferences": sorted(set(unlisted) - old_unlisted) if comparable else [],
+            "removedReferences": [list(pair) for pair in sorted(old_memberships - current_memberships)],
+            "actions": [], "confirmedDeletions": [],
+            "forcedRefresh": "unavailable", "deletionSync": "unsupported",
+            "serverFreshness": "unverified", "historyComplete": False,
+            "notice": "List absence, missing reads, and removed memberships do not prove deletion. Native caching may apply; no application state was changed."}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     sub = parser.add_subparsers(dest="command", required=True)
@@ -494,18 +560,26 @@ def main():
     cloud = sub.add_parser("capture-cloud", help="Bind fresh native read_thread metadata for durable identities")
     cloud.add_argument("--input", required=True, type=Path)
     cloud.add_argument("--reads", required=True, type=Path)
+    refresh = sub.add_parser("refresh-check", help="Observe ChatGPT sidebar references; never infer deletion or mutate state")
+    refresh.add_argument("--input", required=True, type=Path)
+    refresh.add_argument("--previous", type=Path)
     checker = sub.add_parser("verify", help="Verify observed metadata against a plan")
     for name in ("before", "after", "plan"):
         checker.add_argument("--" + name, required=True, type=Path)
-    for command in (planner, checker, capture, cloud):
+    for command in (planner, checker, capture, cloud, refresh):
         command.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     read = lambda path: json.loads(path.read_text(encoding="utf-8-sig"))
     try:
-        inputs = [args.input, args.state] if args.command == "capture-identity" else [args.input, args.reads] if args.command == "capture-cloud" else [args.input] if args.command == "plan" else [args.before, args.after, args.plan]
+        if args.command == "refresh-check":
+            inputs = [args.input] + ([args.previous] if args.previous else [])
+        else:
+            inputs = [args.input, args.state] if args.command == "capture-identity" else [args.input, args.reads] if args.command == "capture-cloud" else [args.input] if args.command == "plan" else [args.before, args.after, args.plan]
         if args.output.resolve() in {path.resolve() for path in inputs}:
             raise ValueError("Output must not overwrite an input snapshot")
-        if args.command == "capture-identity":
+        if args.command == "refresh-check":
+            result = refresh_check(read(args.input), read(args.previous) if args.previous else None)
+        elif args.command == "capture-identity":
             result = capture_identity(read(args.input), args.state)
         elif args.command == "capture-cloud":
             result = capture_cloud(read(args.input), read(args.reads))
@@ -519,7 +593,7 @@ def main():
             handle.write("\n")
         print(json.dumps({"reportWritten": True, "status": result.get("status", "planned"),
                           "moves": len(result.get("moves", result.get("confirmedMoves", [])))}, ensure_ascii=False))
-        return 0 if result.get("status", "planned") in {"planned", "metadata_verified"} else 2
+        return 0 if result.get("status", "planned") in {"planned", "metadata_verified", "observed"} else 2
     except (ValueError, KeyError, TypeError, OSError) as exc:
         print(f"Cannot produce report: {exc}", file=sys.stderr)
         return 1

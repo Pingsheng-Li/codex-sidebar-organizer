@@ -1,6 +1,16 @@
-# Validation scope — 0.1.2
+# Validation scope — 0.1.3
 
 The workflow was designed against native desktop tool schemas observed on 2026-10-11. It does not guarantee that another account, platform, client version, or session exposes those tools. Discovery and capability checks are mandatory at runtime.
+
+## 0.1.3 refresh checks
+
+The 61-test suite includes 12 new refresh tests: stable repeated reads, missing baseline, recent-window eviction, manual membership removal, source outage/recovery, unknown availability shape, content/timestamp projection, pins and project members, invalid/duplicate metadata, Codex-only changes, exclusive CLI output, and incomplete CLI status during outages. Both fresh-extracted ZIPs run `refresh-check` and assert zero actions/deletions and explicit unsupported deletion sync. The skill validator and isolated native plugin installation passed on Windows.
+
+Two real native observations on 2026-10-11 each listed 24 ChatGPT chats in the mixed recent window and 20 distinct ChatGPT section references. One reference was not listed; it stayed unchanged and was not classified as deleted. The second comparison reported `changed: false`, zero actions, and unsupported deletion sync. Separate native readback confirmed six custom sections, 23 projects, and six pins were unchanged. This is a refresh-observation regression, not an end-to-end deletion test.
+
+Inspection of the installed Windows desktop 26.1007.2314.0 found that native ChatGPT list/read handlers can use cached queries. Moving a ChatGPT chat requires loading the conversation first. The exposed native tools provide no forced-refresh parameter, authoritative deletion event, or independent single-reference cleanup operation. The plugin therefore implements observation only. It does not alter client internals, probe private HTTP APIs, or delete a chat to manufacture an end-to-end test.
+
+Background monitoring uses an explicitly requested native thread heartbeat; the package includes instructions, not a bundled daemon. Registration of a schedule is distinct from observing a later scheduled execution. No automatic deletion synchronization, complete historical coverage, UI disappearance, or fixed synchronization delay has been verified.
 
 ## Automated checks
 

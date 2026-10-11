@@ -1,15 +1,13 @@
-# Sidebar Organizer 0.1.2
+# Sidebar Organizer 0.1.3
 
-新增经过逐条读取验证的 Codex 云端记录分类，并修复云端路由主机与侧边栏内部保存标识不同导致的误判。
+新增侧边栏刷新核对，以及用户明确要求后启用的后台定时检查。
 
-- `codex` / `durable` 记录须通过原生读取、唯一成员位置和身份一致性检查，才可归入“Codex 云端 · 聊天”。内部 `local` 前缀不再被当成创建设备证据。
-- 新增 `capture-cloud`，绑定前后快照各自新取得的身份数据；缺少证据、标识冲突、来源不可用时保持原样。
-- 云端分组按需创建、同名复用；置顶、项目归属及手工分组继续保留。
-- 两轮实际运行均确认全部 20 条云端记录：新增分组 0、移动 0、排除项 0、核对错误 0。现有 6 个分组、23 个项目和 6 条置顶保持不变。
-- 49 项自动测试通过；两个 ZIP 解压后验证云端取证、分类、核对和重复运行流程，并通过隔离环境安装检查。
-- 新增可直接用于项目介绍的 [中文简介](https://github.com/VeraPyuyi/codex-sidebar-organizer/blob/main/docs/INTRODUCTION.zh-CN.md)。
+- 新增只读 `refresh-check`：比较当前原生聊天列表与分组引用，报告待核对项。列表遗漏、来源故障、手动移出分组均不会被认定为删除。
+- 支持按需创建或复用原生后台核对任务，默认每小时一次；无变化保持安静，出现新的待核对项或有意义的故障时提醒。安装插件不会自动开启任务。
+- 刷新检查不建立分组、不移动、不删除聊天；既有分类、临时 ID 与 Codex 云端识别功能保留。
+- 61 项自动测试通过；两个 ZIP 解压后验证刷新检查和原有流程，并通过隔离环境安装与技能校验。
 
-云端执行来源不代表聊天由哪台电脑或浏览器创建。以上是可读取记录的元数据验证；完整历史、界面显示与折叠、跨设备同步仍按实际能力说明。
+**尚不支持网页删除后的自动清理。** 当前桌面原生工具没有提供强制缓存刷新、权威删除状态或独立清理残留引用的操作。聊天未出现在最近 50 条里不能证明已删除；无法确认的记录全部保留。定时核对不等于删除同步，不承诺实时性或完整历史覆盖。
 
 ## 安装或升级
 
@@ -17,10 +15,10 @@
 
 ```sh
 codex plugin marketplace remove sidebar-organizer-marketplace
-codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.2
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.3
 codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 ```
 
-独立 skill 用户下载 `organize-sidebar-skill-0.1.2.zip`，备份并替换同名技能文件夹。`sidebar-organizer-plugin-0.1.2.zip` 为插件目录包；`SHA256SUMS.txt` 提供校验值。选择一种安装方式即可。
+独立 skill 用户下载 `organize-sidebar-skill-0.1.3.zip`，备份并替换同名技能文件夹。`sidebar-organizer-plugin-0.1.3.zip` 为插件目录包；`SHA256SUMS.txt` 提供校验值。选择一种安装方式即可。
 
 [中文说明](https://github.com/VeraPyuyi/codex-sidebar-organizer#readme) · [English](https://github.com/VeraPyuyi/codex-sidebar-organizer/blob/main/README.en.md) · [验证范围](https://github.com/VeraPyuyi/codex-sidebar-organizer/blob/main/docs/VALIDATION.md)

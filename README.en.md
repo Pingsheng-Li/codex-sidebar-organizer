@@ -9,7 +9,7 @@ A skills-only plugin that files desktop projects and chats into native sections 
 With a Codex version supporting plugin commands:
 
 ```sh
-codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.2
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.3
 codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 ```
 
@@ -21,17 +21,17 @@ Use $organize-sidebar to organize my projects and chats by source. Preserve pins
 
 For a preview, add “Preview only; do not move anything.” Run again to file new items. Existing manual groups remain intact. The default uses recent-update chat sorting, a shared sidebar preference; pinned sorting and the current grouping mode are preserved.
 
-If `plugin add` is unavailable, add the marketplace and install Sidebar Organizer from the desktop Plugins Directory. Alternatively, download `organize-sidebar-skill-0.1.2.zip`, extract it, and copy the complete `organize-sidebar` folder into `~/.codex/skills/` (Windows: `%USERPROFILE%\.codex\skills\`; use your configured Codex home if different). Back up an existing folder before replacing it. Start a fresh desktop session. Install either the plugin or standalone skill, not both.
+If `plugin add` is unavailable, add the marketplace and install Sidebar Organizer from the desktop Plugins Directory. Alternatively, download `organize-sidebar-skill-0.1.3.zip`, extract it, and copy the complete `organize-sidebar` folder into `~/.codex/skills/` (Windows: `%USERPROFILE%\.codex\skills\`; use your configured Codex home if different). Back up an existing folder before replacing it. Start a fresh desktop session. Install either the plugin or standalone skill, not both.
 
-The separate `sidebar-organizer-plugin-0.1.2.zip` contains a standard plugin directory for clients supporting ZIP import or custom marketplaces. It is not the standalone skill folder.
+The separate `sidebar-organizer-plugin-0.1.3.zip` contains a standard plugin directory for clients supporting ZIP import or custom marketplaces. It is not the standalone skill folder.
 
 ### Upgrade from an older release
 
-If you installed with `--ref v0.1.0` or `--ref v0.1.1`, replace this plugin's marketplace registration and reinstall. Adding the new ref directly may fail because the registered source differs. This locally verified sequence preserves chats and sections:
+If you installed with an older version tag, replace this plugin's marketplace registration and reinstall. Adding the new ref directly may fail because the registered source differs. This locally verified sequence preserves chats and sections:
 
 ```sh
 codex plugin marketplace remove sidebar-organizer-marketplace
-codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.2
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.3
 codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 ```
 
@@ -52,7 +52,13 @@ Run in a desktop session exposing native sidebar list/create/move tools. Install
 
 The tested list tool returns up to 50 recent non-pinned chats and has no history cursor. The skill checks for supported history enumeration, but reports older history as **not covered, total unknown** when unavailable. A cloud record does not identify a creation browser or computer; “local” means the current execution host. Unknown physical provenance is not guessed from titles.
 
-Metadata verification does not prove visible placement, opening, or collapsed state. Without a supported UI surface, click section headings to collapse them manually. Cross-device synchronization and background scheduling are outside this version's scope.
+Metadata verification does not prove visible placement, opening, or collapsed state. Without a supported UI surface, click section headings to collapse them manually. Cross-device and web-deletion synchronization are unsupported. Background observation is opt-in through native automation.
+
+## Refresh checks in 0.1.3
+
+Ask “Use $organize-sidebar to check sidebar references” for a one-off observation, or “Check my sidebar every hour in the background and notify me only about new issues” to opt into a native thread heartbeat. Repeated requests reuse a matching automation. Installing the plugin alone enables no background tasks.
+
+The new `refresh-check` command compares metadata only, with zero groups, moves, or deletions. It reports references missing from the limited recent list as **uncertain**, never as deleted. Cache freshness, complete history, and deletion status cannot be established by the tested tools; neither forced cache refresh nor independent stale-reference cleanup is available. This does **not** make web-deleted chats automatically disappear from the desktop. It never edits client state to bypass this limitation. Background execution depends on the host automation runtime and does not promise a sync deadline. See the [refresh procedure](plugins/sidebar-organizer/skills/organize-sidebar/references/refresh.md).
 
 ## Codex cloud records in 0.1.2
 

@@ -13,7 +13,7 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugins/sidebar-organizer"
 SKILL = PLUGIN / "skills/organize-sidebar"
-SKILL_FILES = ["SKILL.md", "agents/openai.yaml", "references/native-tools.md", "scripts/sidebar_plan.py"]
+SKILL_FILES = ["SKILL.md", "agents/openai.yaml", "references/native-tools.md", "references/refresh.md", "scripts/sidebar_plan.py"]
 
 
 def checked_bytes(path):
@@ -83,6 +83,12 @@ def smoke(path, script_relative):
         before = fixture_module.fixture()
         before_path = directory / "synthetic-before.json"
         before_path.write_text(json.dumps(before), encoding="utf-8")
+        refresh_path = directory / "refresh.json"
+        subprocess.run([sys.executable, str(script), "refresh-check", "--input", str(before_path),
+                        "--previous", str(before_path), "--output", str(refresh_path)], check=True, capture_output=True)
+        refresh = json.loads(refresh_path.read_text(encoding="utf-8"))
+        assert refresh["changed"] is False and refresh["actions"] == []
+        assert refresh["confirmedDeletions"] == [] and refresh["deletionSync"] == "unsupported"
         plan_path = directory / "synthetic-plan.json"
         subprocess.run([sys.executable, str(script), "plan", "--input", str(before_path), "--output", str(plan_path)], check=True, capture_output=True)
         plan = json.loads(plan_path.read_text(encoding="utf-8"))

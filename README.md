@@ -4,7 +4,7 @@
 
 在支持原生侧边栏工具的 Codex 桌面会话中，一句话按来源收纳项目和聊天。适合多台电脑、ChatGPT 云端项目和大量「最近」聊天混在一起的情况。
 
-这是一个轻量技能插件：无需服务器、API Key 或额外 MCP 服务。**“自动归档”指分类收纳；不隐藏、删除或真正归档聊天。** 每次调用执行一轮，后续新增聊天可再次整理。
+这是一个轻量技能插件：无需服务器、API Key 或额外 MCP 服务。**“自动归档”指分类收纳；不隐藏、删除或真正归档聊天。** 每次调用执行一轮，后续新增聊天可再次整理。也支持按需启用后台定时核对；目前不能自动同步网页端的删除。
 
 ## 整理效果
 
@@ -35,7 +35,7 @@
 需要支持 `codex plugin` 命令的 Codex 版本。执行：
 
 ```sh
-codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.2
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.3
 codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 ```
 
@@ -51,11 +51,11 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 
 ### 从旧版升级
 
-如果此前按 `--ref v0.1.0` 或 `--ref v0.1.1` 安装，先替换此插件的市场来源，再重新安装。直接添加新版本可能提示来源不同；以下流程已在本机验证，不会更改聊天和分组：
+如果此前按 旧版本标签 安装，先替换此插件的市场来源，再重新安装。直接添加新版本可能提示来源不同；以下流程已在本机验证，不会更改聊天和分组：
 
 ```sh
 codex plugin marketplace remove sidebar-organizer-marketplace
-codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.2
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.3
 codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 ```
 
@@ -63,11 +63,11 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 
 ## ZIP 安装：独立 skill
 
-1. 在 [Releases](https://github.com/VeraPyuyi/codex-sidebar-organizer/releases/latest) 下载 `organize-sidebar-skill-0.1.2.zip` 并解压。
+1. 在 [Releases](https://github.com/VeraPyuyi/codex-sidebar-organizer/releases/latest) 下载 `organize-sidebar-skill-0.1.3.zip` 并解压。
 2. 将其中完整的 `organize-sidebar` 文件夹复制到技能目录。Windows 默认是 `%USERPROFILE%\.codex\skills\`，macOS/Linux 默认是 `~/.codex/skills/`；自定义了 Codex 主目录时用对应目录。已有同名技能时先备份再替换。
 3. 新建桌面会话，选择该技能并发出整理指令。
 
-`sidebar-organizer-plugin-0.1.2.zip` 是标准插件目录包，供支持插件 ZIP 导入的客户端或自行维护 marketplace 的用户使用。不要把插件包当成独立技能文件夹复制。无需同时安装两个版本，避免出现两个同名技能。
+`sidebar-organizer-plugin-0.1.3.zip` 是标准插件目录包，供支持插件 ZIP 导入的客户端或自行维护 marketplace 的用户使用。不要把插件包当成独立技能文件夹复制。无需同时安装两个版本，避免出现两个同名技能。
 
 ## 常用说法
 
@@ -75,9 +75,19 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 使用 $organize-sidebar，先预览分类方案，不要移动。
 使用 $organize-sidebar，把未分类的项目和聊天按来源整理。
 使用 $organize-sidebar，再整理一下新增聊天，保留已有分组。
+使用 $organize-sidebar，检查侧边栏里是否有待核对的聊天引用。
+使用 $organize-sidebar，每小时在后台核对一次侧边栏，有新异常再提醒我。
 ```
 
 首次整理会说明预计移动数量、未知来源和近期列表覆盖范围，随后执行已经请求的操作。默认将聊天设为最近更新时间排序；这是客户端共享的侧边栏偏好，置顶排序和分组显示模式保持原样。
+
+## 0.1.3：刷新核对与后台检查
+
+可主动重新读取侧边栏，或者明确要求后通过 Codex 原生自动化每小时核对一次。重复设置会查找并复用已有任务；安装插件本身不会开启后台任务。检查只读取元数据，不建立分组、不移动或删除聊天。无变化保持安静，有新的待核对引用或来源异常时才提醒。
+
+**这还不能实现“网页端删除后，桌面残留自动消失”。** 当前原生工具没有提供强制刷新缓存、权威删除状态或独立清理残留引用的操作。最近列表最多 50 条；某条聊天不在列表里，也可能只是较旧、已归档或暂时未加载，不能据此删除。`refresh-check` 只报告这些不确定项，所有无法确认的记录保持原样；也不会修改客户端内部文件来绕过限制。
+
+后台检查依赖宿主自动化运行环境，不承诺实时同步或固定的删除同步延迟。参见 [刷新机制与边界](plugins/sidebar-organizer/skills/organize-sidebar/references/refresh.md)。
 
 ## 0.1.2：识别 Codex 云端记录
 
@@ -99,7 +109,7 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 - **历史覆盖：** 已验证的列表工具最多返回 50 条非置顶聊天，没有历史分页。技能会检查是否还有获准的历史读取方式；无法读取的更早聊天明确列为未覆盖，总量未知。项目数量、聊天数量均动态读取，不硬编码作者的账户规模。
 - **来源含义：** 云端记录不代表由某台电脑或网页创建。本机标签指当前执行主机。无法可靠路由的后台记录会跳过，避免生成不可见的“空分类”。
 - **折叠和打开：** 元数据核对不能证明 UI 可见或可打开。没有支持的界面能力时，会提示手动点击标题收起，不声称已完成自动折叠。
-- **同步与定时：** 不承诺其他电脑或网页版同步，不自动创建后台定时任务。
+- **同步与定时：** 仅在明确要求后创建或更新后台核对任务。不支持自动删除同步，不承诺其他电脑或网页版同步。
 - **结果：** 助手会报告已移动、保留、跳过和未验证数量。操作失败或期间状态改变时重新读取，避免盲目重试。
 
 ## 隐私与实现

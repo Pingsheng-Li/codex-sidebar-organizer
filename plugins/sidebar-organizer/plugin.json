@@ -1,18 +1,22 @@
 {
   "$schema": "https://agent-plugins.org/schemas/1.0.0/plugin.schema.json",
   "name": "sidebar-organizer",
-  "version": "0.1.2",
+  "version": "0.1.3",
   "description": "Organize desktop projects and chats by verified source while preserving pins and project membership.",
-  "author": {"name": "VeraPyuyi"},
+  "author": {
+    "name": "VeraPyuyi"
+  },
   "extensions": {
     "com.openai": {
       "interface": {
         "displayName": "Sidebar Organizer · 侧边栏整理",
         "shortDescription": "Group projects and chats",
-        "longDescription": "On-demand source-based filing for the Codex desktop sidebar. Preserves pinned items, project membership, and existing manual groups. Reports limited history coverage. Requires native desktop sidebar tools.",
+        "longDescription": "Source-based sidebar filing plus opt-in background metadata checks. Preserves pins, projects, and manual groups. Automatic web-deletion sync is unsupported. Requires native desktop tools.",
         "developerName": "VeraPyuyi",
         "category": "Productivity",
-        "capabilities": ["Interactive"],
+        "capabilities": [
+          "Interactive"
+        ],
         "defaultPrompt": "Use $organize-sidebar to organize my desktop projects and chats by source, preserving pins and project membership."
       }
     }

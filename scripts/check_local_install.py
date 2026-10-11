@@ -37,7 +37,7 @@ def main():
             raise RuntimeError("Expected one installed skill copy")
         assert copies[0].read_bytes() == (ROOT / "plugins/sidebar-organizer/skills/organize-sidebar/SKILL.md").read_bytes()
         plugin_copy = copies[0].parents[2]
-        for relative in ("plugin.json", "skills/organize-sidebar/scripts/sidebar_plan.py", "skills/organize-sidebar/references/native-tools.md"):
+        for relative in ("plugin.json", "skills/organize-sidebar/scripts/sidebar_plan.py", "skills/organize-sidebar/references/native-tools.md", "skills/organize-sidebar/references/refresh.md"):
             assert (plugin_copy / relative).read_bytes() == (ROOT / "plugins/sidebar-organizer" / relative).read_bytes()
         print(json.dumps({"isolatedMarketplace": "passed", "install": "passed", "pluginBytesMatch": True}))
 

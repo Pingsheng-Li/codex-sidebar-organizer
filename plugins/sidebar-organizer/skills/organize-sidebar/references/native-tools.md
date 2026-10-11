@@ -12,6 +12,8 @@ Verified against the desktop tool surface on 2026-10-11. Discover current schema
 | Section order | `reorder_sidebar_sections({sectionIds})`; include every custom section |
 | Chat order | `reorder_section({sectionId, threadIds})`; include every chat in that section |
 | Recency sorting | `update_sidebar_preferences({sorting: {chats: "updated_at"}})` |
+| Read-only refresh check | Re-read `list_threads`; no native forced-refresh/deletion-proof/cleanup tool exposed in the tested host |
+| Requested background checks | `automation_update`, native thread heartbeat; see [refresh procedure](refresh.md) |
 
 `source` is `codex` or `chatgpt`. Omit `hostId` for ChatGPT. The observed default section IDs are `threads`, `chats`, `projects`, `orbit`, and `agents`; `pinned` is protected. All other section IDs are treated as custom. If a future client adds default IDs, inspect its documented schema before extending the helper. The helper deliberately treats unknown section IDs as protected custom sections.
 

@@ -1,11 +1,13 @@
 ---
 name: organize-sidebar
-description: Organize Codex desktop sidebar projects and chats into collapsible sections by verified local, remote, ChatGPT cloud, or Codex cloud source. Use for sidebar cleanup, grouping recent chats, 分类整理聊天, 项目分组, or 自动归档 meaning sidebar filing. Preserve pins, project membership, and existing manual groups; support preview and metadata-based verification. Requires native desktop sidebar tools.
+description: Organize Codex desktop sidebar projects and chats by verified source, preserving pins, project membership, and manual groups. Use for sidebar cleanup, 分类整理聊天, 项目分组, or 自动归档 meaning filing. Also use for 刷新侧边栏, refresh checks, or explicitly requested background checks. Refresh is observation only; automatic deletion sync is unsupported. Requires native desktop tools.
 ---
 
 # Organize the sidebar
 
-Treat “archive / 自动归档” in this workflow as **filing into sidebar sections**. Do not hide, archive, delete, rename, or change chat content, project paths, or project membership. This is an on-demand workflow, not a background watcher. Do not create a schedule unless explicitly requested.
+Treat “archive / 自动归档” in this workflow as **filing into sidebar sections**. Do not hide, archive, delete, rename, or change chat content, project paths, or project membership. Default to one on-demand run. Do not create a schedule unless explicitly requested.
+
+For refresh or web-deletion synchronization requests, first read [refresh checks and background monitoring](references/refresh.md). Route refresh-only requests to that observation-only workflow, not the organization steps below. Current native tools cannot force server refresh, prove deletion, or safely clean a deleted chat's local reference. State this limitation; never infer deletion from a recent-list omission. Explicit background requests can enable native heartbeat checks, defaulting to hourly, with no duplicate automation and no sidebar mutations. Do not describe monitoring as completed deletion synchronization.
 
 ## 1. Check capabilities and scope
 
@@ -112,4 +114,4 @@ Check for an authorized, supported history enumeration surface. Follow actual cu
 
 Sections use the app's native collapse controls. Collapse them only if a documented tool or permitted UI surface exposes and verifies that operation. Respect computer-use skill restrictions and active user input. Without such access, say “sections created; automatic collapse unavailable here” and tell the user to click the section headings. Never claim folded state or cross-device sync from metadata alone.
 
-Finish in the user's language with moved counts, protected/skipped counts, verification failures or unknowns, historical coverage, folding/opening status, and how to run again. Do not claim “all chats organized” without complete enumeration and readback. No scheduling or external messaging is part of this skill.
+Finish in the user's language with moved counts, protected/skipped counts, verification failures or unknowns, historical coverage, folding/opening status, and how to run again. Do not claim “all chats organized” without complete enumeration and readback. Organization does not create schedules. Scheduling is available only for explicitly requested refresh checks through the linked procedure; external messaging is never included.
