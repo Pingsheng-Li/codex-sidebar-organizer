@@ -48,6 +48,18 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 
 如果 CLI 没有 `plugin add`，可先添加上述 marketplace，再在桌面插件目录选择 **Sidebar Organizer** 安装；或者使用下面的独立 skill。市场条目需要重新打开应用才能出现时，请先保存进行中的工作。
 
+### 从 0.1.0 升级
+
+如果此前按 `--ref v0.1.0` 安装，先替换此插件的市场来源，再重新安装。直接添加新版本可能提示来源不同；以下流程已在本机验证，不会更改聊天和分组：
+
+```sh
+codex plugin marketplace remove sidebar-organizer-marketplace
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.1
+codex plugin add sidebar-organizer@sidebar-organizer-marketplace
+```
+
+安装完成后，新建桌面会话以加载更新后的技能。独立 skill 用户按下方步骤备份并替换技能文件夹。
+
 ## ZIP 安装：独立 skill
 
 1. 在 [Releases](https://github.com/VeraPyuyi/codex-sidebar-organizer/releases/latest) 下载 `organize-sidebar-skill-0.1.1.zip` 并解压。

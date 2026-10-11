@@ -25,6 +25,18 @@ If `plugin add` is unavailable, add the marketplace and install Sidebar Organize
 
 The separate `sidebar-organizer-plugin-0.1.1.zip` contains a standard plugin directory for clients supporting ZIP import or custom marketplaces. It is not the standalone skill folder.
 
+### Upgrade from 0.1.0
+
+If you installed with `--ref v0.1.0`, replace this plugin's marketplace registration and reinstall. Adding the new ref directly may fail because the registered source differs. This locally verified sequence preserves chats and sections:
+
+```sh
+codex plugin marketplace remove sidebar-organizer-marketplace
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.1
+codex plugin add sidebar-organizer@sidebar-organizer-marketplace
+```
+
+Open a fresh desktop session to load the updated skill. Standalone skill users should back up and replace the skill folder instead.
+
 ## Behavior
 
 - Creates/reuses Local Projects, ChatGPT Cloud Projects, Local Chats, ChatGPT Cloud Chats, and Source Unconfirmed sections, with separate verified remote-host sections when applicable.

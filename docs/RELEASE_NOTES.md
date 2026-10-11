@@ -14,4 +14,12 @@
 
 下载 `organize-sidebar-skill-0.1.1.zip` 安装独立 skill，或使用 `sidebar-organizer-plugin-0.1.1.zip`。`SHA256SUMS.txt` 提供校验值。
 
+使用插件版且此前安装了 `--ref v0.1.0` 的用户，执行以下已验证的升级步骤，然后新建桌面会话加载新版技能：
+
+```sh
+codex plugin marketplace remove sidebar-organizer-marketplace
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.1
+codex plugin add sidebar-organizer@sidebar-organizer-marketplace
+```
+
 安装及升级说明见 [中文说明](https://github.com/VeraPyuyi/codex-sidebar-organizer#readme) / [English](https://github.com/VeraPyuyi/codex-sidebar-organizer/blob/main/README.en.md)。
