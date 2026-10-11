@@ -9,7 +9,7 @@ A skills-only plugin that files desktop projects and chats into native sections 
 With a Codex version supporting plugin commands:
 
 ```sh
-codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.1
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.2
 codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 ```
 
@@ -21,17 +21,17 @@ Use $organize-sidebar to organize my projects and chats by source. Preserve pins
 
 For a preview, add “Preview only; do not move anything.” Run again to file new items. Existing manual groups remain intact. The default uses recent-update chat sorting, a shared sidebar preference; pinned sorting and the current grouping mode are preserved.
 
-If `plugin add` is unavailable, add the marketplace and install Sidebar Organizer from the desktop Plugins Directory. Alternatively, download `organize-sidebar-skill-0.1.1.zip`, extract it, and copy the complete `organize-sidebar` folder into `~/.codex/skills/` (Windows: `%USERPROFILE%\.codex\skills\`; use your configured Codex home if different). Back up an existing folder before replacing it. Start a fresh desktop session. Install either the plugin or standalone skill, not both.
+If `plugin add` is unavailable, add the marketplace and install Sidebar Organizer from the desktop Plugins Directory. Alternatively, download `organize-sidebar-skill-0.1.2.zip`, extract it, and copy the complete `organize-sidebar` folder into `~/.codex/skills/` (Windows: `%USERPROFILE%\.codex\skills\`; use your configured Codex home if different). Back up an existing folder before replacing it. Start a fresh desktop session. Install either the plugin or standalone skill, not both.
 
-The separate `sidebar-organizer-plugin-0.1.1.zip` contains a standard plugin directory for clients supporting ZIP import or custom marketplaces. It is not the standalone skill folder.
+The separate `sidebar-organizer-plugin-0.1.2.zip` contains a standard plugin directory for clients supporting ZIP import or custom marketplaces. It is not the standalone skill folder.
 
-### Upgrade from 0.1.0
+### Upgrade from an older release
 
-If you installed with `--ref v0.1.0`, replace this plugin's marketplace registration and reinstall. Adding the new ref directly may fail because the registered source differs. This locally verified sequence preserves chats and sections:
+If you installed with `--ref v0.1.0` or `--ref v0.1.1`, replace this plugin's marketplace registration and reinstall. Adding the new ref directly may fail because the registered source differs. This locally verified sequence preserves chats and sections:
 
 ```sh
 codex plugin marketplace remove sidebar-organizer-marketplace
-codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.1
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.2
 codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 ```
 
@@ -40,6 +40,7 @@ Open a fresh desktop session to load the updated skill. Standalone skill users s
 ## Behavior
 
 - Creates/reuses Local Projects, ChatGPT Cloud Projects, Local Chats, ChatGPT Cloud Chats, and Source Unconfirmed sections, with separate verified remote-host sections when applicable.
+- Separately files Codex cloud execution records only after fresh, matching native per-record reads; internal local-prefixed storage keys never imply a creation device.
 - Preserves pinned items and their order, project membership, paths, and existing custom groups.
 - Skips ambiguous identities, unavailable sources, duplicate target names, and unroutable backing records.
 - Rechecks metadata after changes and reports moved, protected, skipped, and unverified items.
@@ -53,13 +54,19 @@ The tested list tool returns up to 50 recent non-pinned chats and has no history
 
 Metadata verification does not prove visible placement, opening, or collapsed state. Without a supported UI surface, click section headings to collapse them manually. Cross-device synchronization and background scheduling are outside this version's scope.
 
+## Codex cloud records in 0.1.2
+
+Fresh native `read_thread` metadata verifies each `codex` / `durable` identity against the list and its unique sidebar membership. The optional helper binds those projections to the exact snapshot and normalizes storage keys only in memory. Proven unfiled records use the optional **Codex Cloud · Chats** section; existing groups are reused, manual groups remain intact, and unproven records stay unchanged. Each before/after check and repeat run requires fresh evidence. Cloud execution does not establish the computer or browser where a chat was created.
+
+Two live Windows passes each verified all 20 scoped cloud records before and after, with zero new groups, moves, exclusions, or verification errors. Six existing custom groups, 23 projects, and six pins were preserved. The 49-test suite and fresh-extracted ZIP checks cover the cloud workflow and its failure cases; see [validation scope](docs/VALIDATION.md).
+
 ## Privacy and validation
 
 Version 0.1.1 fixes temporary `client-new-thread:` IDs using a read-only local membership check. When needed, the optional helper loads the current Codex home's `.codex-global-state.json` and exports only a uniquely matching set of custom-section IDs, names, and members. It never writes client state or guesses identity from titles. This is a version-sensitive compatibility adapter; missing or conflicting evidence blocks affected moves. Evidence is freshly captured before and after each run.
 
-Two independent live Windows passes each reconciled the already-filed chat with zero new groups, zero moves, and zero operation-check errors. Existing sections, pins, and project membership stayed unchanged. Previously unresolved records and older history remain explicitly outside coverage; operation success is reported separately from overall completeness.
+The earlier 0.1.1 live Windows passes each reconciled the already-filed temporary-ID chat with zero new groups, zero moves, and zero operation-check errors. Existing sections, pins, and project membership stayed unchanged. Its 20 previously excluded records are now covered by the separate 0.1.2 cloud regression. Older history remains outside coverage; operation success is reported separately from overall completeness.
 
-No telemetry, credentials, network client, or remote service is bundled. Native host tools perform changes. Private metadata snapshots may be saved temporarily on the user's computer for verification; never publish them. Conversation bodies are unnecessary. The host's own service and data handling still apply.
+No telemetry, credentials, network client, or remote service is bundled. Native host tools perform changes. Private metadata snapshots may be saved temporarily on the user's computer for verification; never publish them. Native identity reads may also return messages; the workflow projects only identity fields and does not use or retain bodies. The host's own service and data handling still apply.
 
 The optional Python 3.10+ standard-library helper only plans and verifies; it cannot move sidebar items. If Python is missing, the agent can follow the skill directly. All tests use synthetic data.
 

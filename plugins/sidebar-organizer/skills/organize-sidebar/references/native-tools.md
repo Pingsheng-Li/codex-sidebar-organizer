@@ -5,6 +5,7 @@ Verified against the desktop tool surface on 2026-10-11. Discover current schema
 | Operation | Native function and important arguments |
 |---|---|
 | List | `list_threads({limit: 50})`, `list_projects({})` |
+| Verify Codex cloud identity | `read_thread({threadId, hostId: "durable", turnLimit: 1, includeOutputs: false})`; project only response thread metadata |
 | Create | `create_sidebar_section({name})` |
 | Move project | `move_project_to_sidebar_section({projectId, sectionId})` |
 | Move chat | `move_thread_to_sidebar_section({threadId, source, hostId?, sectionId})` |
@@ -51,7 +52,7 @@ Section keys recognized by the helper:
 
 The helper constructs keys from exact native fields and demands exact section membership evidence. An entry absent from all sections or in multiple sections is skipped. Unresolved `client-new-thread:` aliases block unfiled Codex chats on the affected host until exact membership evidence is available. A pinned entry remains protected even if it also appears in `threads`. A chat with **any nonempty projectId** remains protected even if that project is absent from this snapshot.
 
-Remote IDs must occur on a `local` or `remote` project with a nonlocal host. `durable`, `cloud`, and `unknown` are not physical host evidence. Sources/hosts listed as unavailable block dependent moves; ambiguous availability representations fail closed.
+Remote IDs must occur on a `local` or `remote` project with a nonlocal host. `durable`, `cloud`, and `unknown` are not physical host evidence. Version 0.1.2 separately supports `durable` as Codex cloud execution with the per-record evidence below; other synthetic hosts remain unclassified. Sources/hosts listed as unavailable block dependent moves; ambiguous availability representations fail closed.
 
 The planner emits the five standard targets plus observed verified remote targets. It preserves custom items even when placed in the wrong source group: moving already filed items requires a separate user request. Names are matched exactly. Duplicate target names block affected moves and section creation for that name. It never deletes sections. The verifier checks observed pin order, metadata, protected placements, and each planned move; new/missing/duplicate identities produce incomplete or failed results.
 
@@ -76,3 +77,17 @@ Each private augmented snapshot adds `identityEvidence` with source `local-sideb
 The helper then normalizes a copy of section membership and removes only the proven custom members' default-section duplicates. It does not infer which individual temporary token represents which canonical ID, change a host/source, alter the supplied snapshot, or modify any client file. Evidence must be freshly captured on **both** sides of verification and again on each subsequent run. Do not accept evidence from downloaded plans or public issue attachments. A file that is missing, malformed, or from an unsupported client version leaves the alias unresolved.
 
 Version 2 plan/report fields include `identityReconciliation.resolvedMemberships` in plans, before/after reconciliation in reports, `operationChecksPassed`, and `excludedItemCount`. `operationChecksPassed` may be true while the overall `status` is `incomplete` only because already-skipped records remain outside coverage; this does not turn excluded identities or history into verified items. Verify still returns exit code 2 for incomplete coverage and 1 for invalid input. Check structured operation results explicitly when assessing a scoped regression.
+
+## Codex cloud routing evidence (0.1.2)
+
+The tested Windows desktop 26.1007.2314.0 classifies routing host `durable` as cloud execution. Its sidebar key construction can nevertheless store the same stable ID as `codex:thread:local:<id>`. This is a storage convention, not evidence that execution or creation happened on the current PC. This rule is distinct from the temporary-ID adapter: no local state file or guessed ChatGPT conversation mapping is needed.
+
+For each listed `kind: codex`, `hostId: durable` candidate, a fresh successful native `read_thread` must return the exact same `id`, `kind`, and `hostId`. Save only those three fields in `{"threads": [...]}`. Ignore and discard all returned conversation items; small output limits may not suppress them. Never generate evidence from titles, paths, timestamps, previous runs, or downloaded files.
+
+Run `capture-cloud --input <snapshot> --reads <fresh-read-metadata> --output <enriched-snapshot>`. It projects the metadata again, stores `cloudEvidence.source: native-read-thread`, and binds it to the SHA-256 of the native snapshot excluding both evidence envelopes. This binding detects staleness, not forgery; trusted collection is the assistant's responsibility. A partial successful set is allowed; unproven records are skipped. Incorrect or duplicate evidence, host/namespace collisions, conflicting project membership, duplicate native rows, and absent/multiple/unknown-host section keys reject the evidence file. Refresh and collect a clean verified subset; do not overwrite the client's state.
+
+Only one exact `codex:thread:local:<id>` or `codex:thread:durable:<id>` membership is accepted. Internally the helper normalizes a copy to the durable key and retains the actual key in `cloudReconciliation.nativeItemKey`. Mutation routing always uses the original ID with `source: codex`, `hostId: durable`. Before and after snapshots each require fresh reads and capture; verification rejects missing after-evidence even when a move receipt succeeded. The temporary-ID and cloud adapters can be composed without altering either native snapshot.
+
+Eligible default-section records target `Codex 云端 · 聊天` / `Codex Cloud · Chats`. This optional group follows ChatGPT Cloud Chats, precedes remote groups and Source Unconfirmed, and is created only for eligible proven records; an existing unique group is reused. Pins, project members, and existing custom groups remain protected. Explicit user-requested reclassification of a custom group requires a separately scoped plan; ordinary repeat runs never dismantle it. `durable` is not a physical remote host and never produces a remote-computer group.
+
+Version 3 plans include `cloudReconciliation`; verification reports contain its before/after entries. For a cloud regression, require every scoped identity on both sides, no exclusions or verification errors for that set, and zero duplicate group creation or movement on a repeated plan. `historyComplete` and UI checks remain separate. No claim is made about the device or browser that created a cloud-backed conversation.

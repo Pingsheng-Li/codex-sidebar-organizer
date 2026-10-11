@@ -52,9 +52,10 @@ def simulate(snapshot, plan):
         if target["state"] == "create":
             sections.append({"sectionId": f"managed-{i}", "name": target["name"], "itemKeys": []})
     for move in plan["moves"]:
+        native_key = next((r["nativeItemKey"] for r in plan.get("cloudReconciliation", []) if r["key"] == move["key"]), move["key"])
         for section in sections:
-            section["itemKeys"] = [k for k in section["itemKeys"] if k != move["key"]]
-        next(s for s in sections if s["name"] == move["targetName"])["itemKeys"].insert(0, move["key"])
+            section["itemKeys"] = [k for k in section["itemKeys"] if k not in {move["key"], native_key}]
+        next(s for s in sections if s["name"] == move["targetName"])["itemKeys"].insert(0, native_key)
     # Model the workflow's native managed-section reorder, including reused groups.
     names = [t["name"] for t in plan["targets"]]
     slots = [i for i, s in enumerate(sections) if s["name"] in names]
@@ -117,7 +118,7 @@ class PlannerTests(unittest.TestCase):
             before["sidebar"]["threads"][0]["hostId"] = host
             before["sidebar"]["sections"][3]["itemKeys"][0] = f"codex:thread:{host}:t-new"
             plan = planner.build_plan(before)
-            self.assertIn("unverified_host", [s["reason"] for s in plan["skipped"]])
+            self.assertIn("unverified_cloud_identity" if host == "durable" else "unverified_host", [s["reason"] for s in plan["skipped"]])
             self.assertNotIn("t-new", [m.get("threadId") for m in plan["moves"]])
 
     def test_titles_are_not_provenance_or_instructions(self):
@@ -391,6 +392,130 @@ class IdentityReconciliationTests(unittest.TestCase):
         self.assertTrue(report["operationChecksPassed"])
         self.assertEqual(report["excludedItemCount"], 1)
         self.assertFalse(report["historyComplete"])
+
+
+def cloud_fixture():
+    snapshot = fixture()
+    snapshot["sidebar"]["threads"].insert(0, {"id": "durable-demo", "kind": "codex", "hostId": "durable", "projectId": None})
+    snapshot["sidebar"]["sections"][3]["itemKeys"].insert(0, "codex:thread:local:durable-demo")
+    reads = {"threads": [{"id": "durable-demo", "kind": "codex", "hostId": "durable"}]}
+    return snapshot, reads
+
+
+class CloudReconciliationTests(unittest.TestCase):
+    def test_verified_cloud_uses_observed_key_and_durable_route(self):
+        raw, reads = cloud_fixture()
+        before = copy.deepcopy(raw)
+        plan = planner.build_plan(planner.capture_cloud(raw, reads))
+        move = next(m for m in plan["moves"] if m.get("threadId") == "durable-demo")
+        self.assertEqual((move["hostId"], move["source"], move["targetName"]), ("durable", "codex", "Codex 云端 · 聊天"))
+        self.assertEqual(plan["cloudReconciliation"][0]["nativeItemKey"], "codex:thread:local:durable-demo")
+        self.assertEqual(raw, before)
+
+    def test_cloud_roundtrip_and_repeat_with_fresh_evidence(self):
+        raw, reads = cloud_fixture()
+        before = planner.capture_cloud(raw, reads)
+        plan = planner.build_plan(before)
+        after = planner.capture_cloud(simulate(raw, plan), reads)
+        self.assertTrue(planner.verify(before, after, plan)["operationChecksPassed"])
+        again = planner.build_plan(after)
+        self.assertEqual(again["moves"], [])
+        self.assertTrue(all(t["state"] == "reuse" for t in again["targets"]))
+        self.assertEqual(again["skipped"], [])
+        self.assertEqual(len(again["cloudReconciliation"]), 1)
+
+    def test_missing_read_never_guesses_from_title_path_or_local_key(self):
+        raw, _ = cloud_fixture()
+        raw["sidebar"]["threads"][0].update(title="Local PC", cwd="C:/example")
+        plan = planner.build_plan(raw)
+        self.assertNotIn("durable-demo", [m.get("threadId") for m in plan["moves"]])
+        self.assertNotIn("Codex 云端 · 聊天", [t["name"] for t in plan["targets"]])
+
+    def test_read_metadata_is_projected_and_no_bodies_exported(self):
+        raw, reads = cloud_fixture()
+        reads["threads"][0].update(title="private-title", preview="private-body", turns=["private-content"])
+        proof = planner.capture_cloud(raw, reads)["cloudEvidence"]
+        self.assertNotIn("private", json.dumps(proof))
+
+    def test_wrong_kind_host_id_and_duplicate_reads_rejected(self):
+        for variant in ("kind", "hostId", "id", "duplicate"):
+            raw, reads = cloud_fixture()
+            if variant == "duplicate":
+                reads["threads"].append(copy.deepcopy(reads["threads"][0]))
+            else:
+                reads["threads"][0][variant] = "incorrect"
+            with self.subTest(variant=variant), self.assertRaises(ValueError):
+                planner.capture_cloud(raw, reads)
+
+    def test_cross_host_collision_and_duplicate_native_id_rejected(self):
+        for host in ("local", "durable", "other"):
+            raw, reads = cloud_fixture()
+            raw["sidebar"]["threads"].append({"id": "durable-demo", "kind": "codex", "hostId": host, "projectId": None})
+            with self.subTest(host=host), self.assertRaises(ValueError):
+                planner.capture_cloud(raw, reads)
+
+    def test_missing_multiple_and_unknown_host_memberships_rejected(self):
+        for variant in ("missing", "duplicate", "two-keys", "other-host"):
+            raw, reads = cloud_fixture()
+            keys = raw["sidebar"]["sections"][3]["itemKeys"]
+            if variant == "missing": keys.pop(0)
+            elif variant == "duplicate": keys.append(keys[0])
+            elif variant == "two-keys": keys.append("codex:thread:durable:durable-demo")
+            else: keys[0] = "codex:thread:other:durable-demo"
+            with self.subTest(variant=variant), self.assertRaises(ValueError):
+                planner.capture_cloud(raw, reads)
+
+    def test_canonical_durable_key_also_supported(self):
+        raw, reads = cloud_fixture()
+        raw["sidebar"]["sections"][3]["itemKeys"][0] = "codex:thread:durable:durable-demo"
+        self.assertEqual(len(planner.build_plan(planner.capture_cloud(raw, reads))["cloudReconciliation"]), 1)
+
+    def test_stale_before_and_missing_after_evidence_fail(self):
+        raw, reads = cloud_fixture()
+        before = planner.capture_cloud(raw, reads)
+        stale = copy.deepcopy(before)
+        stale["sidebar"]["threads"][0]["updatedAt"] = 123
+        with self.assertRaises(ValueError): planner.build_plan(stale)
+        plan = planner.build_plan(before)
+        report = planner.verify(before, simulate(raw, plan), plan)
+        self.assertFalse(report["operationChecksPassed"])
+        self.assertIn("cloud_evidence_not_refreshed", report["unverified"])
+
+    def test_pins_project_members_and_custom_groups_stay(self):
+        for variant in ("pin", "project", "custom"):
+            raw, reads = cloud_fixture()
+            row = raw["sidebar"]["threads"][0]
+            key = raw["sidebar"]["sections"][3]["itemKeys"].pop(0)
+            if variant == "project":
+                row["projectId"] = "unlisted-project"
+                raw["sidebar"]["sections"][3]["itemKeys"].append(key)
+            else:
+                raw["sidebar"]["sections"][0 if variant == "pin" else 1]["itemKeys"].append(key)
+                if variant == "pin": raw["sidebar"]["pinnedThreads"].append(copy.deepcopy(row))
+            plan = planner.build_plan(planner.capture_cloud(raw, reads))
+            self.assertNotIn("durable-demo", [m.get("threadId") for m in plan["moves"]])
+            self.assertNotIn("Codex 云端 · 聊天", [t["name"] for t in plan["targets"]])
+
+    def test_unavailable_cloud_and_duplicate_target_names_block(self):
+        for variant in ("host", "source", "duplicate"):
+            raw, reads = cloud_fixture()
+            if variant == "host": raw["sidebar"]["unavailableHosts"] = ["durable"]
+            elif variant == "source": raw["sidebar"]["unavailableSources"] = ["codex"]
+            else:
+                raw["sidebar"]["sections"].extend({"sectionId": "cloud-" + str(i), "name": "Codex 云端 · 聊天", "itemKeys": []} for i in range(2))
+            plan = planner.build_plan(planner.capture_cloud(raw, reads))
+            self.assertNotIn("durable-demo", [m.get("threadId") for m in plan["moves"]])
+
+    def test_alias_and_cloud_evidence_compose_in_either_order(self):
+        raw, state = alias_fixture()
+        cloud, reads = cloud_fixture()
+        raw["sidebar"]["threads"].insert(0, cloud["sidebar"]["threads"][0])
+        raw["sidebar"]["sections"][3]["itemKeys"].append("codex:thread:local:durable-demo")
+        a = planner.capture_cloud(capture_fixture(raw, state), reads)
+        b = capture_fixture(planner.capture_cloud(raw, reads), state)
+        self.assertEqual(planner.build_plan(a), planner.build_plan(b))
+        self.assertEqual(len(planner.build_plan(a)["identityReconciliation"]["resolvedMemberships"]), 1)
+        self.assertEqual(len(planner.build_plan(a)["cloudReconciliation"]), 1)
 
 
 if __name__ == "__main__":

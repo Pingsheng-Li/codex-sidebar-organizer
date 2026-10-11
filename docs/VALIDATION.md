@@ -1,4 +1,4 @@
-# Validation scope — 0.1.1
+# Validation scope — 0.1.2
 
 The workflow was designed against native desktop tool schemas observed on 2026-10-11. It does not guarantee that another account, platform, client version, or session exposes those tools. Discovery and capability checks are mandatory at runtime.
 
@@ -22,7 +22,7 @@ GitHub Actions runs these checks on Windows and Linux. The optional helper has n
 
 The initial Windows release checks passed with Codex CLI 0.144.1: `python scripts/check_local_install.py` added the local marketplace and installed the plugin using a separate temporary configuration, then confirmed the installed skill bytes matched the source. This did not change the user's installed plugins. The portable manifest also passed the published Agent Plugins 1.0 JSON schema; the skill passed the bundled Skill Creator validator using Python UTF-8 mode.
 
-A read-only preview against the author's current native desktop lists confirmed that the helper accepts the live metadata layout, preserves existing groups, and reports unmatched identities as skipped. No real sidebar mutations were performed to test the released skill. Real account snapshots were kept outside this repository and are not distributed.
+A read-only preview against the author's current native desktop lists confirmed that the helper accepts the live metadata layout, preserves existing groups, and reports unmatched identities as skipped. That initial preview did not perform sidebar mutations. Real account snapshots were kept outside this repository and are not distributed.
 
 ## 0.1.1 live regression and new tests
 
@@ -30,7 +30,22 @@ On 2026-10-11, two independent live runs each used fresh `list_projects` / `list
 
 Twenty pre-existing unresolved backing records remained excluded. Consequently the overall result intentionally stayed `incomplete`, with `plan_contains_skipped_items` and `historyComplete: false`; the temporary-ID regression itself passed. UI opening, folding, complete history, and other clients' state schemas were not part of this regression.
 
-The suite now has 37 tests. Added scenarios cover matching persisted membership, ghost Recents entries, unproven aliases blocking moves, fresh evidence across two passes, native graduation to canonical IDs, stale hashes, conflicting members, duplicate scopes, pins, remote hosts, missing identities, read-only state handling, and exclusion reporting. Both extracted ZIPs also exercise the new `capture-identity` command on synthetic data.
+The 0.1.1 suite had 37 tests. Added scenarios cover matching persisted membership, ghost Recents entries, unproven aliases blocking moves, fresh evidence across two passes, native graduation to canonical IDs, stale hashes, conflicting members, duplicate scopes, pins, remote hosts, missing identities, read-only state handling, and exclusion reporting. Both extracted ZIPs also exercise the new `capture-identity` command on synthetic data.
+
+## 0.1.2 cloud identity regression
+
+The 20 previously excluded records were individually read at their native `durable` host in a separate investigation. The installed Windows desktop 26.1007.2314.0 treats this routing host as cloud execution, while its sidebar can store an internal local-prefixed key. They were filed into a separate Codex Cloud Chats group through native tools before this release's regression runs. No physical creation device or ChatGPT conversation mapping was inferred.
+
+Two independent live no-op organization runs on 2026-10-11 used the new helper against those already-filed records. Each run obtained new native lists and 20 fresh `read_thread` identity projections before planning, then new lists and another 20 fresh reads after planning: 80 per-record reads in total. Each snapshot also independently reconciled the existing temporary client ID. No conversation bodies were retained in the private evidence files.
+
+| Live pass | Proven cloud records before / after | New groups | Moves | Exclusions | Check errors |
+|---|---:|---:|---:|---:|---:|
+| 1 | 20 / 20 | 0 | 0 | 0 | 0 |
+| 2 | 20 / 20 | 0 | 0 | 0 | 0 |
+
+Both reports returned `metadata_verified` and `operationChecksPassed: true`. Six existing custom group IDs/order, 23 project records, six pins/order, and observed project memberships were preserved. No artificial test chats were created or moved out and back to manufacture activity. Full history, UI visibility, opening, automatic collapse, and cross-device synchronization remain unverified by these metadata tests.
+
+The suite now has 49 tests, adding cloud routing/storage-key separation, fresh evidence and repeat-run behavior, missing or stale evidence, failed after-readback, cross-host collisions, duplicate reads and native identities, conflicting memberships, unavailable sources, protected groups/pins/projects, metadata-only exports, and composition with temporary-ID evidence. Both release ZIPs are fresh-extracted and exercise `capture-cloud`, plan, verify, and a zero-change repeat plan. The isolated Codex marketplace install check also compares installed plugin bytes with source.
 
 ## Manual desktop acceptance
 

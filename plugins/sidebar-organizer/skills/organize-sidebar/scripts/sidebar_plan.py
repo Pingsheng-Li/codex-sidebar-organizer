@@ -14,6 +14,7 @@ import sys
 
 DEFAULTS = {"threads", "chats", "projects", "orbit", "agents"}
 NON_HOSTS = {"durable", "cloud", "unknown"}
+CLOUD_LABELS = {"zh": "Codex 云端 · 聊天", "en": "Codex Cloud · Chats"}
 LABELS = {
     "zh": ["本机 · 项目", "ChatGPT 云端 · 项目", "本机 · 聊天", "ChatGPT 云端 · 聊天", "来源待确认"],
     "en": ["Local · Projects", "ChatGPT Cloud · Projects", "Local · Chats", "ChatGPT Cloud · Chats", "Source Unconfirmed"],
@@ -27,6 +28,10 @@ def stable(value):
 def fingerprint(value):
     data = json.dumps(value, sort_keys=True, ensure_ascii=False, separators=(",", ":"))
     return hashlib.sha256(data.encode("utf-8")).hexdigest()
+
+
+def native_snapshot(snapshot):
+    return {k: v for k, v in snapshot.items() if k not in {"identityEvidence", "cloudEvidence"}}
 
 
 def chat_key(row):
@@ -46,7 +51,7 @@ def alias_host(key):
 
 def reconcile(snapshot, evidence=None):
     """Normalize only proven custom membership; never guess an alias-to-ID pair."""
-    native = {k: v for k, v in snapshot.items() if k != "identityEvidence"}
+    native = native_snapshot(snapshot)
     proof = evidence if evidence is not None else snapshot.get("identityEvidence")
     if proof is None:
         return snapshot, []
@@ -117,10 +122,10 @@ def reconcile(snapshot, evidence=None):
 
 def capture_identity(snapshot, state_path):
     """Read one local state file, export only matching section metadata, never write it."""
-    native = {k: v for k, v in snapshot.items() if k != "identityEvidence"}
+    native = native_snapshot(snapshot)
     sections = array(native["sidebar"], "sections")
     if not any(alias_host(k) for s in sections for k in s["itemKeys"]):
-        return native
+        return {k: v for k, v in snapshot.items() if k != "identityEvidence"}
     state = json.loads(state_path.read_text(encoding="utf-8-sig"))
     buckets = state.get("electron-persisted-atom-state", {}).get("sidebar-custom-sections-v3")
     if not isinstance(buckets, dict):
@@ -138,7 +143,61 @@ def capture_identity(snapshot, state_path):
             continue
     if len(candidates) != 1:
         raise ValueError("Need exactly one consistent local sidebar scope; refresh both reads")
-    return {**native, "identityEvidence": candidates[0]}
+    return {**snapshot, "identityEvidence": candidates[0]}
+
+
+def reconcile_cloud(original, normalized):
+    """Separate native sidebar storage keys from a verified durable routing host."""
+    proof = original.get("cloudEvidence")
+    if proof is None:
+        return normalized, []
+    if (not isinstance(proof, dict) or proof.get("source") != "native-read-thread"
+            or proof.get("nativeSnapshotSha256") != fingerprint(native_snapshot(original))):
+        raise ValueError("Cloud evidence does not match this native snapshot")
+    reads = array(proof, "threads")
+    sidebar = normalized["sidebar"]
+    rows = array(sidebar, "threads") + array(sidebar, "pinnedThreads")
+    sections = array(sidebar, "sections")
+    seen, resolved = set(), []
+    for read in reads:
+        if (not isinstance(read, dict) or not stable(read.get("id"))
+                or read["id"].startswith("client-new-thread:")
+                or read.get("kind") != "codex" or read.get("hostId") != "durable"):
+            raise ValueError("Cloud evidence requires a successful exact codex/durable thread read")
+        ident = read["id"]
+        if ident in seen:
+            raise ValueError("Duplicate cloud evidence identity")
+        seen.add(ident)
+        matches = [r for r in rows if r.get("id") == ident]
+        if not matches or any(r.get("kind") != "codex" or r.get("hostId") != "durable" for r in matches):
+            raise ValueError("Cloud read conflicts with the native identity or another host")
+        if len({r.get("projectId") for r in matches}) != 1:
+            raise ValueError("Cloud read has conflicting project membership")
+        if sum(r.get("id") == ident for r in sidebar["threads"]) > 1:
+            raise ValueError("Duplicate native cloud identity")
+        key = "codex:thread:durable:" + ident
+        allowed = {key, "codex:thread:local:" + ident}
+        places = [(s["sectionId"], k) for s in sections for k in s["itemKeys"]
+                  if k.startswith("codex:thread:") and k.endswith(":" + ident)]
+        if len(places) != 1 or places[0][1] not in allowed:
+            raise ValueError("Cloud identity needs one unambiguous native section key")
+        sid, native_key = places[0]
+        resolved.append({"key": key, "nativeItemKey": native_key, "sectionId": sid})
+    result = json.loads(json.dumps(normalized))
+    replacements = {r["nativeItemKey"]: r["key"] for r in resolved}
+    for section in result["sidebar"]["sections"]:
+        section["itemKeys"] = [replacements.get(k, k) for k in section["itemKeys"]]
+    return result, resolved
+
+
+def capture_cloud(snapshot, reads):
+    """Bind agent-collected native read metadata to this snapshot; no network calls."""
+    proof = {"source": "native-read-thread", "nativeSnapshotSha256": fingerprint(native_snapshot(snapshot)),
+             "threads": [{k: r.get(k) for k in ("id", "kind", "hostId")} for r in array(reads, "threads")]}
+    result = {**snapshot, "cloudEvidence": proof}
+    normalized, _ = reconcile(result)
+    reconcile_cloud(result, normalized)
+    return result
 
 
 def availability(values, field):
@@ -160,7 +219,9 @@ def array(obj, field):
 def index(snapshot):
     if not isinstance(snapshot, dict):
         raise ValueError("Snapshot must be an object")
+    original = snapshot
     snapshot, resolved = reconcile(snapshot)
+    snapshot, cloud_resolved = reconcile_cloud(original, snapshot)
     project_rows = array(snapshot.get("projects"), "projects")
     sidebar = snapshot.get("sidebar")
     recent = array(sidebar, "threads")
@@ -229,7 +290,8 @@ def index(snapshot):
     return dict(projects=projects, chats=chats, sections=section_map, locations=locations,
                 names=names, pins=pin_keys, invalid=invalid, duplicates=duplicates,
                 hosts=hosts, sources=sources, preferences=sidebar["sidebarPreferences"], recent=recent,
-                resolved=resolved, alias_hosts={alias_host(k) for k in locations if alias_host(k)})
+                resolved=resolved, cloud_resolved=cloud_resolved,
+                alias_hosts={alias_host(k) for k in locations if alias_host(k)})
 
 
 def blocked(source, host, data):
@@ -240,6 +302,12 @@ def blocked(source, host, data):
 def build_plan(snapshot, language="zh"):
     labels = LABELS[language]
     data = index(snapshot)
+    cloud_keys = {r["key"] for r in data["cloud_resolved"]}
+    cloud_label = CLOUD_LABELS[language]
+    cloud_needed = bool(data["names"].get(cloud_label)) or any(
+        key not in data["pins"] and not data["chats"][key].get("projectId")
+        and data["locations"].get(key, [None])[0] in DEFAULTS
+        and not blocked("codex", "durable", data) for key in cloud_keys)
     remote = {}
     for key, row in data["projects"].items():
         host = row.get("hostId")
@@ -252,7 +320,7 @@ def build_plan(snapshot, language="zh"):
         name = f"{prefix} {remote[host]} [{host}]"
         remote_labels[host] = [name + (" · 项目" if language == "zh" else " · Projects"),
                                name + (" · 聊天" if language == "zh" else " · Chats")]
-    target_names = labels[:4] + [name for pair in remote_labels.values() for name in pair] + labels[4:]
+    target_names = labels[:4] + ([cloud_label] if cloud_needed else []) + [name for pair in remote_labels.values() for name in pair] + labels[4:]
     targets = [{"name": name, "sectionId": data["names"][name][0] if len(data["names"][name]) == 1 else None,
                 "state": "ambiguous" if len(data["names"][name]) > 1 else "reuse" if data["names"][name] else "create"}
                for name in target_names]
@@ -269,6 +337,9 @@ def build_plan(snapshot, language="zh"):
             return
         if key in data["duplicates"]:
             skipped.append({**item, "reason": "duplicate_or_conflicting_identity"})
+            return
+        if entity == "chat" and row.get("hostId") == "durable" and key not in cloud_keys:
+            skipped.append({**item, "reason": "unverified_cloud_identity"})
             return
         if len(places) != 1:
             skipped.append({**item, "reason": "ambiguous_or_missing_section"})
@@ -288,6 +359,8 @@ def build_plan(snapshot, language="zh"):
         offset = 0 if entity == "project" else 2
         if source == "chatgpt" and kind == "chatgpt":
             target = labels[offset + 1]
+        elif entity == "chat" and key in cloud_keys:
+            target = cloud_label
         elif source == "codex" and kind in {"local", "remote", "codex"} and host == "local":
             target = labels[offset]
         elif source == "codex" and host in remote_labels and kind in {"local", "remote", "codex"}:
@@ -321,8 +394,9 @@ def build_plan(snapshot, language="zh"):
     known = set(data["chats"])
     unlisted = [k for k in data["locations"] if (k.startswith("codex:thread:") or k.startswith("chatgpt:conversation:")) and k not in known]
     return {
-        "schemaVersion": 2, "language": language, "snapshotSha256": fingerprint(snapshot),
+        "schemaVersion": 3, "language": language, "snapshotSha256": fingerprint(snapshot),
         "identityReconciliation": {"resolvedMemberships": data["resolved"], "unresolvedAliasHosts": sorted(data["alias_hosts"])},
+        "cloudReconciliation": data["cloud_resolved"],
         "targets": targets, "moves": moves, "protected": protected, "skipped": skipped,
         "sorting": {"chats": "updated_at"},
         "coverage": {"complete": False, "totalHistory": None, "listedProjects": len(data["projects"]),
@@ -345,6 +419,8 @@ def verify(before, after, plan):
         unknown.append("plan_contains_skipped_items")
     if old["alias_hosts"] or new["alias_hosts"]:
         unknown.append("unresolved_client_alias")
+    if {r["key"] for r in old["cloud_resolved"]} - {r["key"] for r in new["cloud_resolved"]}:
+        unknown.append("cloud_evidence_not_refreshed")
     if old["resolved"] and not new["resolved"]:
         old_resolved = {r["key"] for r in old["resolved"]}
         # A client can graduate to canonical IDs; no proof is needed once native IDs agree.
@@ -397,10 +473,11 @@ def verify(before, after, plan):
     if actual != desired:
         unknown.append("managed_section_order_or_creation_not_verified")
     blocking_unknown = [item for item in unknown if item != "plan_contains_skipped_items"]
-    return {"schemaVersion": 2, "status": "failed" if errors else "incomplete" if unknown else "metadata_verified",
+    return {"schemaVersion": 3, "status": "failed" if errors else "incomplete" if unknown else "metadata_verified",
             "operationChecksPassed": not errors and not blocking_unknown,
             "excludedItemCount": len(plan["skipped"]),
             "identityReconciliation": {"before": old["resolved"], "after": new["resolved"]},
+            "cloudReconciliation": {"before": old["cloud_resolved"], "after": new["cloud_resolved"]},
             "confirmedMoves": confirmed, "errors": errors, "unverified": unknown,
             "historyComplete": False, "uiPlacement": "unverified", "collapse": "unverified", "opening": "unverified"}
 
@@ -414,19 +491,24 @@ def main():
     capture = sub.add_parser("capture-identity", help="Add read-only local membership evidence for temporary IDs")
     capture.add_argument("--input", required=True, type=Path)
     capture.add_argument("--state", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / ".codex-global-state.json")
+    cloud = sub.add_parser("capture-cloud", help="Bind fresh native read_thread metadata for durable identities")
+    cloud.add_argument("--input", required=True, type=Path)
+    cloud.add_argument("--reads", required=True, type=Path)
     checker = sub.add_parser("verify", help="Verify observed metadata against a plan")
     for name in ("before", "after", "plan"):
         checker.add_argument("--" + name, required=True, type=Path)
-    for command in (planner, checker, capture):
+    for command in (planner, checker, capture, cloud):
         command.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     read = lambda path: json.loads(path.read_text(encoding="utf-8-sig"))
     try:
-        inputs = [args.input, args.state] if args.command == "capture-identity" else [args.input] if args.command == "plan" else [args.before, args.after, args.plan]
+        inputs = [args.input, args.state] if args.command == "capture-identity" else [args.input, args.reads] if args.command == "capture-cloud" else [args.input] if args.command == "plan" else [args.before, args.after, args.plan]
         if args.output.resolve() in {path.resolve() for path in inputs}:
             raise ValueError("Output must not overwrite an input snapshot")
         if args.command == "capture-identity":
             result = capture_identity(read(args.input), args.state)
+        elif args.command == "capture-cloud":
+            result = capture_cloud(read(args.input), read(args.reads))
         elif args.command == "plan":
             result = build_plan(read(args.input), args.language)
         else:

@@ -14,6 +14,7 @@
 ▸ ChatGPT 云端 · 项目
 ▸ 本机 · 聊天
 ▸ ChatGPT 云端 · 聊天
+▸ Codex 云端 · 聊天            ← 有逐条读取证据时收纳
 ▸ 远程 Workstation [host-a] · 项目   ← 有真实来源证据时增加
 ▸ 远程 Workstation [host-a] · 聊天
 ▸ 来源待确认
@@ -34,7 +35,7 @@
 需要支持 `codex plugin` 命令的 Codex 版本。执行：
 
 ```sh
-codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.1
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.2
 codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 ```
 
@@ -48,13 +49,13 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 
 如果 CLI 没有 `plugin add`，可先添加上述 marketplace，再在桌面插件目录选择 **Sidebar Organizer** 安装；或者使用下面的独立 skill。市场条目需要重新打开应用才能出现时，请先保存进行中的工作。
 
-### 从 0.1.0 升级
+### 从旧版升级
 
-如果此前按 `--ref v0.1.0` 安装，先替换此插件的市场来源，再重新安装。直接添加新版本可能提示来源不同；以下流程已在本机验证，不会更改聊天和分组：
+如果此前按 `--ref v0.1.0` 或 `--ref v0.1.1` 安装，先替换此插件的市场来源，再重新安装。直接添加新版本可能提示来源不同；以下流程已在本机验证，不会更改聊天和分组：
 
 ```sh
 codex plugin marketplace remove sidebar-organizer-marketplace
-codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.1
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.2
 codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 ```
 
@@ -62,11 +63,11 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 
 ## ZIP 安装：独立 skill
 
-1. 在 [Releases](https://github.com/VeraPyuyi/codex-sidebar-organizer/releases/latest) 下载 `organize-sidebar-skill-0.1.1.zip` 并解压。
+1. 在 [Releases](https://github.com/VeraPyuyi/codex-sidebar-organizer/releases/latest) 下载 `organize-sidebar-skill-0.1.2.zip` 并解压。
 2. 将其中完整的 `organize-sidebar` 文件夹复制到技能目录。Windows 默认是 `%USERPROFILE%\.codex\skills\`，macOS/Linux 默认是 `~/.codex/skills/`；自定义了 Codex 主目录时用对应目录。已有同名技能时先备份再替换。
 3. 新建桌面会话，选择该技能并发出整理指令。
 
-`sidebar-organizer-plugin-0.1.1.zip` 是标准插件目录包，供支持插件 ZIP 导入的客户端或自行维护 marketplace 的用户使用。不要把插件包当成独立技能文件夹复制。无需同时安装两个版本，避免出现两个同名技能。
+`sidebar-organizer-plugin-0.1.2.zip` 是标准插件目录包，供支持插件 ZIP 导入的客户端或自行维护 marketplace 的用户使用。不要把插件包当成独立技能文件夹复制。无需同时安装两个版本，避免出现两个同名技能。
 
 ## 常用说法
 
@@ -78,11 +79,19 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 
 首次整理会说明预计移动数量、未知来源和近期列表覆盖范围，随后执行已经请求的操作。默认将聊天设为最近更新时间排序；这是客户端共享的侧边栏偏好，置顶排序和分组显示模式保持原样。
 
+## 0.1.2：识别 Codex 云端记录
+
+新版把 Codex 云端执行记录与 ChatGPT 云端聊天分开收纳。遇到 `durable` 记录时，先逐条通过原生工具读取身份，再核对唯一的侧边栏位置；两处证据一致才归类。侧边栏内部的 `local` 前缀不会被当成创建电脑的证据。已有分组会复用，无法确认的记录保持原样。
+
+前后快照和每次重跑都重新取证，避免沿用过期结果。完整历史、界面折叠和创建设备仍按各自的证据范围报告。
+
+两轮本机实测均确认 20 条 Codex 云端记录，新增分组 0、移动 0、排除项 0、核对错误 0；6 个现有分组、23 个项目和 6 条置顶保持不变。49 项自动测试通过，完整范围见 [验证记录](docs/VALIDATION.md)。
+
 ## 0.1.1：修复临时聊天 ID 的核对问题
 
 部分客户端会在分组里显示 `client-new-thread:` 临时 ID，却在最近列表里保留正式 ID。0.1.1 增加只读交叉核对：加载本机 Codex 状态文件，仅提取严格匹配的分组元数据，确认正式聊天已归类后不再重复移动。它不根据标题猜对应关系，也不会写回状态文件。这个兼容适配依赖已验证的本地状态格式；格式缺失或证据冲突时会保留未验证状态并停止相关移动。
 
-本次 Windows 实测独立运行两轮，每轮都正确识别已归类聊天，新增分组 0、移动 0、核对错误 0。原有 5 个分组、23 个项目和 6 条置顶保持不变。此前 20 条无法核实身份的记录仍单独报告为排除项，不计入通过范围。
+0.1.1 的 Windows 实测独立运行两轮，每轮都正确识别已归类聊天，新增分组 0、移动 0、核对错误 0。原有 5 个分组、23 个项目和 6 条置顶保持不变。当时排除的 20 条后台记录现已通过 0.1.2 的独立云端身份核对。
 
 ## 能力边界
 
@@ -95,11 +104,13 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 
 ## 隐私与实现
 
-插件没有网络客户端、遥测、凭据或远程执行服务，只使用宿主已有的桌面工具。助手可能在本机临时目录保存 ID、路径和分组信息以供核对；这些属于私人记录，不应提交到 GitHub。插件不要求读取聊天正文。宿主 Codex/ChatGPT 的服务和数据处理方式仍由宿主决定。
+插件没有网络客户端、遥测、凭据或远程执行服务，只使用宿主已有的桌面工具。助手可能在本机临时目录保存 ID、路径和分组信息以供核对；这些属于私人记录，不应提交到 GitHub。原生身份读取工具可能同时返回消息内容，整理流程只提取身份字段，不使用或保存正文。宿主 Codex/ChatGPT 的服务和数据处理方式仍由宿主决定。
 
 存在临时 ID 时，可选辅助程序还会只读加载当前 Codex 主目录中的 `.codex-global-state.json`，从中提取匹配的分组记录作为证据。不会导出该文件的其他设置，不会搜集其他账户或历史备份。
 
-可选的 Python 3.10+ 辅助程序只生成分类方案、核对前后元数据，不操作应用。没有 Python 时，助手可按技能规则直接使用原生工具。代码和测试全部使用虚构数据。
+可选的 Python 3.10+ 辅助程序只生成分类方案、核对前后元数据，不操作应用。没有 Python 时，助手可按技能规则直接使用原生工具。公开测试和示例全部使用虚构数据。
+
+需要介绍本项目时，可使用这份 [项目简介](docs/INTRODUCTION.zh-CN.md)。
 
 ## 开发与验证
 

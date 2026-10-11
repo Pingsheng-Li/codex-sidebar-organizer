@@ -106,6 +106,31 @@ def smoke(path, script_relative):
         assert len(result["identityReconciliation"]["resolvedMemberships"]) == 1
         assert not any(m.get("threadId") == "t-new" for m in result["moves"])
         assert state_path.read_bytes() == state_bytes
+        cloud_raw, cloud_reads = fixture_module.cloud_fixture()
+        cloud_input, cloud_read_path = directory / "cloud-native.json", directory / "cloud-reads.json"
+        cloud_input.write_text(json.dumps(cloud_raw), encoding="utf-8")
+        cloud_read_path.write_text(json.dumps(cloud_reads), encoding="utf-8")
+        cloud_before, cloud_plan = directory / "cloud-before.json", directory / "cloud-plan.json"
+        subprocess.run([sys.executable, str(script), "capture-cloud", "--input", str(cloud_input),
+                        "--reads", str(cloud_read_path), "--output", str(cloud_before)], check=True, capture_output=True)
+        subprocess.run([sys.executable, str(script), "plan", "--input", str(cloud_before),
+                        "--output", str(cloud_plan)], check=True, capture_output=True)
+        cloud_result = json.loads(cloud_plan.read_text(encoding="utf-8"))
+        cloud_move = next(m for m in cloud_result["moves"] if m.get("threadId") == "durable-demo")
+        assert cloud_move["hostId"] == "durable" and cloud_move["targetName"] == "Codex 云端 · 聊天"
+        cloud_after_raw, cloud_after = directory / "cloud-after-native.json", directory / "cloud-after.json"
+        cloud_after_raw.write_text(json.dumps(fixture_module.simulate(cloud_raw, cloud_result)), encoding="utf-8")
+        subprocess.run([sys.executable, str(script), "capture-cloud", "--input", str(cloud_after_raw),
+                        "--reads", str(cloud_read_path), "--output", str(cloud_after)], check=True, capture_output=True)
+        cloud_verification = directory / "cloud-verification.json"
+        subprocess.run([sys.executable, str(script), "verify", "--before", str(cloud_before), "--after", str(cloud_after),
+                        "--plan", str(cloud_plan), "--output", str(cloud_verification)], check=True, capture_output=True)
+        assert json.loads(cloud_verification.read_text(encoding="utf-8"))["operationChecksPassed"]
+        cloud_repeat = directory / "cloud-repeat.json"
+        subprocess.run([sys.executable, str(script), "plan", "--input", str(cloud_after),
+                        "--output", str(cloud_repeat)], check=True, capture_output=True)
+        repeat = json.loads(cloud_repeat.read_text(encoding="utf-8"))
+        assert repeat["moves"] == [] and all(t["state"] == "reuse" for t in repeat["targets"])
 
 
 def main():
