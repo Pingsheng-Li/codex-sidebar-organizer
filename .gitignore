@@ -1,0 +1,10 @@
+__pycache__/
+*.pyc
+dist/
+.venv/
+.private/
+*snapshot*.json
+before.json
+after.json
+plan.json
+verification.json

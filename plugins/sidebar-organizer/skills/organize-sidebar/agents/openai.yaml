@@ -1,0 +1,4 @@
+interface:
+  display_name: "Sidebar Organizer"
+  short_description: "Group projects and chats by source safely"
+  default_prompt: "Use $organize-sidebar to organize my desktop sidebar by source."

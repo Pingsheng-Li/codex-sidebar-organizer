@@ -1,0 +1,12 @@
+{
+  "name": "sidebar-organizer-marketplace",
+  "interface": {"displayName": "Sidebar Organizer"},
+  "plugins": [
+    {
+      "name": "sidebar-organizer",
+      "source": {"source": "local", "path": "./plugins/sidebar-organizer"},
+      "policy": {"installation": "AVAILABLE", "authentication": "ON_INSTALL"},
+      "category": "Productivity"
+    }
+  ]
+}
