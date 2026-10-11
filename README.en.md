@@ -9,7 +9,7 @@ A skills-only plugin that files desktop projects and chats into native sections 
 With a Codex version supporting plugin commands:
 
 ```sh
-codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.0
+codex plugin marketplace add VeraPyuyi/codex-sidebar-organizer --ref v0.1.1
 codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 ```
 
@@ -21,9 +21,9 @@ Use $organize-sidebar to organize my projects and chats by source. Preserve pins
 
 For a preview, add “Preview only; do not move anything.” Run again to file new items. Existing manual groups remain intact. The default uses recent-update chat sorting, a shared sidebar preference; pinned sorting and the current grouping mode are preserved.
 
-If `plugin add` is unavailable, add the marketplace and install Sidebar Organizer from the desktop Plugins Directory. Alternatively, download `organize-sidebar-skill-0.1.0.zip`, extract it, and copy the complete `organize-sidebar` folder into `~/.codex/skills/` (Windows: `%USERPROFILE%\.codex\skills\`; use your configured Codex home if different). Back up an existing folder before replacing it. Start a fresh desktop session. Install either the plugin or standalone skill, not both.
+If `plugin add` is unavailable, add the marketplace and install Sidebar Organizer from the desktop Plugins Directory. Alternatively, download `organize-sidebar-skill-0.1.1.zip`, extract it, and copy the complete `organize-sidebar` folder into `~/.codex/skills/` (Windows: `%USERPROFILE%\.codex\skills\`; use your configured Codex home if different). Back up an existing folder before replacing it. Start a fresh desktop session. Install either the plugin or standalone skill, not both.
 
-The separate `sidebar-organizer-plugin-0.1.0.zip` contains a standard plugin directory for clients supporting ZIP import or custom marketplaces. It is not the standalone skill folder.
+The separate `sidebar-organizer-plugin-0.1.1.zip` contains a standard plugin directory for clients supporting ZIP import or custom marketplaces. It is not the standalone skill folder.
 
 ## Behavior
 
@@ -42,6 +42,10 @@ The tested list tool returns up to 50 recent non-pinned chats and has no history
 Metadata verification does not prove visible placement, opening, or collapsed state. Without a supported UI surface, click section headings to collapse them manually. Cross-device synchronization and background scheduling are outside this version's scope.
 
 ## Privacy and validation
+
+Version 0.1.1 fixes temporary `client-new-thread:` IDs using a read-only local membership check. When needed, the optional helper loads the current Codex home's `.codex-global-state.json` and exports only a uniquely matching set of custom-section IDs, names, and members. It never writes client state or guesses identity from titles. This is a version-sensitive compatibility adapter; missing or conflicting evidence blocks affected moves. Evidence is freshly captured before and after each run.
+
+Two independent live Windows passes each reconciled the already-filed chat with zero new groups, zero moves, and zero operation-check errors. Existing sections, pins, and project membership stayed unchanged. Previously unresolved records and older history remain explicitly outside coverage; operation success is reported separately from overall completeness.
 
 No telemetry, credentials, network client, or remote service is bundled. Native host tools perform changes. Private metadata snapshots may be saved temporarily on the user's computer for verification; never publish them. Conversation bodies are unnecessary. The host's own service and data handling still apply.
 

@@ -1,18 +1,17 @@
-# Sidebar Organizer 0.1.0
+# Sidebar Organizer 0.1.1
 
-一句话按来源整理 Codex 桌面端的项目和聊天。提供轻量插件和独立 skill，无需服务器或 API Key。
+修复临时聊天 ID 导致已经归类的聊天再次被计划移动、自动核对失败的问题。
 
-- 保留置顶、项目归属、文件路径和已有手工分组。
-- 支持中文/英文默认分组、已确认远程主机的独立分组、仅预览和重复整理新增条目。
-- 对未知身份、重名分区和不可用来源跳过并报告；移动后核对元数据。
-- 26 项合成测试通过；插件安装在隔离配置中验证；两个 ZIP 均重新解压并运行核对。
+- 新增只读本机分组证据核对：严格匹配分组 ID、名称、成员和正式聊天 ID；不按标题猜身份。
+- 对每次运行的前后状态分别取证，拒绝过期、冲突、跨主机或账户范围不唯一的证据。
+- 无法确认的临时 ID 会阻止相关移动；原有置顶、项目归属和手工分组继续受到保护。
+- 37 项测试通过；两个 ZIP 解压后运行新版核对逻辑。
+- 两轮本机实测均为：新增分组 0、移动 0、核对错误 0。已有 5 个分组、23 个项目和 6 条置顶保持不变。
 
-**下载选择：**
+**覆盖范围仍如实保留：** 20 条此前无法确认的后台记录仍列为排除项；近期列表之外的历史、自动折叠和跨设备同步未因此变为已验证。总体报告可为 `incomplete`，同时显示本轮操作核对通过。
 
-- `organize-sidebar-skill-0.1.0.zip`：解压后将 `organize-sidebar` 文件夹放入本机 Codex 技能目录。
-- `sidebar-organizer-plugin-0.1.0.zip`：用于支持 ZIP 导入的插件客户端或自建 marketplace。
-- `SHA256SUMS.txt`：两个下载包的 SHA-256 校验值。
+**兼容性说明：** 临时 ID 适配器只读加载当前本机 Codex 状态文件，提取匹配的分组字段；不会修改该文件。它依赖本地状态格式，未知格式或冲突会停止相关移动。
 
-**边界：** 需要桌面会话提供原生侧边栏工具。近期列表存在 50 条上限；无法读取的历史明确列为未覆盖。自动折叠取决于客户端能力，不承诺跨设备同步。没有使用真实账户进行自动移动测试；元数据验证不等于 UI 全流程验收。
+下载 `organize-sidebar-skill-0.1.1.zip` 安装独立 skill，或使用 `sidebar-organizer-plugin-0.1.1.zip`。`SHA256SUMS.txt` 提供校验值。
 
-安装及使用见 [中文说明](https://github.com/VeraPyuyi/codex-sidebar-organizer#readme) / [English](https://github.com/VeraPyuyi/codex-sidebar-organizer/blob/main/README.en.md)。
+安装及升级说明见 [中文说明](https://github.com/VeraPyuyi/codex-sidebar-organizer#readme) / [English](https://github.com/VeraPyuyi/codex-sidebar-organizer/blob/main/README.en.md)。

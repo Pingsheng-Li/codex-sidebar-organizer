@@ -31,12 +31,15 @@ def main():
         listing = run("list", "--marketplace", "sidebar-organizer-marketplace", "--available", "--json")
         if "sidebar-organizer" not in json.dumps(listing.get("available", [])):
             raise RuntimeError("Plugin missing from isolated marketplace listing")
-        installed = run("add", "sidebar-organizer@sidebar-organizer-marketplace", "--json")
+        run("add", "sidebar-organizer@sidebar-organizer-marketplace", "--json")
         copies = list((test_root / "codex-config/plugins/cache").rglob("skills/organize-sidebar/SKILL.md"))
         if len(copies) != 1:
             raise RuntimeError("Expected one installed skill copy")
         assert copies[0].read_bytes() == (ROOT / "plugins/sidebar-organizer/skills/organize-sidebar/SKILL.md").read_bytes()
-        print(json.dumps({"isolatedMarketplace": "passed", "install": "passed", "skillBytesMatch": True}))
+        plugin_copy = copies[0].parents[2]
+        for relative in ("plugin.json", "skills/organize-sidebar/scripts/sidebar_plan.py", "skills/organize-sidebar/references/native-tools.md"):
+            assert (plugin_copy / relative).read_bytes() == (ROOT / "plugins/sidebar-organizer" / relative).read_bytes()
+        print(json.dumps({"isolatedMarketplace": "passed", "install": "passed", "pluginBytesMatch": True}))
 
 
 if __name__ == "__main__":

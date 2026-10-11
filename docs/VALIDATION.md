@@ -1,4 +1,4 @@
-# Validation scope — 0.1.0
+# Validation scope — 0.1.1
 
 The workflow was designed against native desktop tool schemas observed on 2026-10-11. It does not guarantee that another account, platform, client version, or session exposes those tools. Discovery and capability checks are mandatory at runtime.
 
@@ -23,6 +23,14 @@ GitHub Actions runs these checks on Windows and Linux. The optional helper has n
 The initial Windows release checks passed with Codex CLI 0.144.1: `python scripts/check_local_install.py` added the local marketplace and installed the plugin using a separate temporary configuration, then confirmed the installed skill bytes matched the source. This did not change the user's installed plugins. The portable manifest also passed the published Agent Plugins 1.0 JSON schema; the skill passed the bundled Skill Creator validator using Python UTF-8 mode.
 
 A read-only preview against the author's current native desktop lists confirmed that the helper accepts the live metadata layout, preserves existing groups, and reports unmatched identities as skipped. No real sidebar mutations were performed to test the released skill. Real account snapshots were kept outside this repository and are not distributed.
+
+## 0.1.1 live regression and new tests
+
+On 2026-10-11, two independent live runs each used fresh `list_projects` / `list_threads` observations and freshly captured local membership evidence before and after planning. The section record contained the canonical chat ID while the native list exposed a temporary alias; both runs resolved that membership with no title matching. Both reported 0 new groups, 0 requested moves, 0 verification errors, and `operationChecksPassed: true`. The five existing group IDs/order, 23 project paths/hosts, six pinned items/order, and observed chat project membership were unchanged. These were real no-op organization runs against an already-organized sidebar, not newly created test chats.
+
+Twenty pre-existing unresolved backing records remained excluded. Consequently the overall result intentionally stayed `incomplete`, with `plan_contains_skipped_items` and `historyComplete: false`; the temporary-ID regression itself passed. UI opening, folding, complete history, and other clients' state schemas were not part of this regression.
+
+The suite now has 37 tests. Added scenarios cover matching persisted membership, ghost Recents entries, unproven aliases blocking moves, fresh evidence across two passes, native graduation to canonical IDs, stale hashes, conflicting members, duplicate scopes, pins, remote hosts, missing identities, read-only state handling, and exclusion reporting. Both extracted ZIPs also exercise the new `capture-identity` command on synthetic data.
 
 ## Manual desktop acceptance
 

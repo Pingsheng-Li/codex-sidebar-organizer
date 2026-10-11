@@ -7,7 +7,9 @@ import argparse
 from collections import Counter, defaultdict
 import hashlib
 import json
+import os
 from pathlib import Path
+import re
 import sys
 
 DEFAULTS = {"threads", "chats", "projects", "orbit", "agents"}
@@ -37,6 +39,108 @@ def chat_key(row):
     return None
 
 
+def alias_host(key):
+    match = re.fullmatch(r"codex:thread:([^:]+):client-new-thread:.+", key)
+    return match.group(1) if match else None
+
+
+def reconcile(snapshot, evidence=None):
+    """Normalize only proven custom membership; never guess an alias-to-ID pair."""
+    native = {k: v for k, v in snapshot.items() if k != "identityEvidence"}
+    proof = evidence if evidence is not None else snapshot.get("identityEvidence")
+    if proof is None:
+        return snapshot, []
+    if (not isinstance(proof, dict) or proof.get("source") != "local-sidebar-custom-sections-v3"
+            or proof.get("nativeSnapshotSha256") != fingerprint(native)):
+        raise ValueError("Identity evidence does not match this native snapshot")
+    sidebar = native["sidebar"]
+    sections = array(sidebar, "sections")
+    custom = {s["sectionId"]: s for s in sections if s["sectionId"] not in DEFAULTS | {"pinned"}}
+    saved_rows = array(proof, "sections")
+    saved = {s["sectionId"]: s for s in saved_rows}
+    if len(custom) != len([s for s in sections if s["sectionId"] in custom]) or len(saved) != len(saved_rows) or set(custom) != set(saved):
+        raise ValueError("Identity evidence has a different custom section inventory")
+    known = {chat_key(r) for r in array(sidebar, "threads") + array(sidebar, "pinnedThreads")}
+    known.discard(None)
+    resolved = []
+    replacements = {}
+    for sid, section in custom.items():
+        stored = saved[sid]
+        if section["name"] != stored.get("name"):
+            raise ValueError("Identity evidence section name mismatch")
+        original, canonical = array(section, "itemKeys"), array(stored, "itemKeys")
+        if not all(stable(k) for k in original + canonical):
+            raise ValueError("Identity evidence contains invalid item keys")
+        if len(set(original)) != len(original) or len(set(canonical)) != len(canonical):
+            raise ValueError("Identity evidence contains duplicate membership")
+        aliases = [k for k in original if alias_host(k)]
+        unchanged = set(original) - set(aliases)
+        if any(alias_host(k) for k in canonical) or not unchanged.issubset(canonical):
+            raise ValueError("Identity evidence disagrees on stable membership")
+        added = set(canonical) - unchanged
+        if len(added) != len(aliases):
+            raise ValueError("Identity evidence has mismatched alias cardinality")
+        hosts = []
+        for key in sorted(added):
+            match = re.fullmatch(r"codex:thread:([^:]+):(.+)", key)
+            if not match or key not in known:
+                raise ValueError("Canonical identity is not in the native chat list")
+            host = match.group(1)
+            # This adapter is for the current machine's persisted membership only.
+            if host != "local" or host in NON_HOSTS:
+                raise ValueError("Local identity evidence cannot resolve other hosts")
+            hosts.append(host)
+            other = [s["sectionId"] for s in sections if s["sectionId"] != sid and key in s["itemKeys"]]
+            if len(other) > 1 or any(place not in DEFAULTS for place in other):
+                raise ValueError("Canonical identity conflicts with another custom/pinned section")
+            if any(chat_key(r) == key for r in sidebar["pinnedThreads"]):
+                raise ValueError("Identity evidence conflicts with a pinned chat")
+        if Counter(hosts) != Counter(alias_host(k) for k in aliases):
+            raise ValueError("Identity evidence host mismatch")
+        if aliases:
+            replacements[sid] = canonical
+            resolved.extend({"key": key, "sectionId": sid} for key in sorted(added))
+    if not replacements:
+        return snapshot, []
+    all_keys = [k for row in saved_rows for k in row["itemKeys"]]
+    if len(all_keys) != len(set(all_keys)):
+        raise ValueError("Persisted membership occurs in multiple custom sections")
+    normalized = json.loads(json.dumps(native))
+    resolved_keys = {r["key"] for r in resolved}
+    for section in normalized["sidebar"]["sections"]:
+        if section["sectionId"] in replacements:
+            section["itemKeys"] = list(replacements[section["sectionId"]])
+        elif section["sectionId"] in DEFAULTS:
+            section["itemKeys"] = [k for k in section["itemKeys"] if k not in resolved_keys]
+    return normalized, resolved
+
+
+def capture_identity(snapshot, state_path):
+    """Read one local state file, export only matching section metadata, never write it."""
+    native = {k: v for k, v in snapshot.items() if k != "identityEvidence"}
+    sections = array(native["sidebar"], "sections")
+    if not any(alias_host(k) for s in sections for k in s["itemKeys"]):
+        return native
+    state = json.loads(state_path.read_text(encoding="utf-8-sig"))
+    buckets = state.get("electron-persisted-atom-state", {}).get("sidebar-custom-sections-v3")
+    if not isinstance(buckets, dict):
+        raise ValueError("Local sidebar state schema is unavailable; keep aliases unresolved")
+    candidates = []
+    for bucket in buckets.values():
+        try:
+            proof = {"source": "local-sidebar-custom-sections-v3", "nativeSnapshotSha256": fingerprint(native),
+                     "sections": [{"sectionId": s["id"], "name": s["name"], "itemKeys": s["itemKeys"]}
+                                  for s in array(bucket, "sections")]}
+            _, resolved = reconcile(native, proof)
+            if resolved:
+                candidates.append(proof)
+        except (KeyError, TypeError, ValueError):
+            continue
+    if len(candidates) != 1:
+        raise ValueError("Need exactly one consistent local sidebar scope; refresh both reads")
+    return {**native, "identityEvidence": candidates[0]}
+
+
 def availability(values, field):
     result = set()
     for value in values:
@@ -56,6 +160,7 @@ def array(obj, field):
 def index(snapshot):
     if not isinstance(snapshot, dict):
         raise ValueError("Snapshot must be an object")
+    snapshot, resolved = reconcile(snapshot)
     project_rows = array(snapshot.get("projects"), "projects")
     sidebar = snapshot.get("sidebar")
     recent = array(sidebar, "threads")
@@ -123,7 +228,8 @@ def index(snapshot):
     duplicates.update(k for k, count in Counter(pin_keys).items() if k and count > 1)
     return dict(projects=projects, chats=chats, sections=section_map, locations=locations,
                 names=names, pins=pin_keys, invalid=invalid, duplicates=duplicates,
-                hosts=hosts, sources=sources, preferences=sidebar["sidebarPreferences"], recent=recent)
+                hosts=hosts, sources=sources, preferences=sidebar["sidebarPreferences"], recent=recent,
+                resolved=resolved, alias_hosts={alias_host(k) for k in locations if alias_host(k)})
 
 
 def blocked(source, host, data):
@@ -170,6 +276,9 @@ def build_plan(snapshot, language="zh"):
         if places[0] not in DEFAULTS:
             protected.append({**item, "reason": "already_filed"})
             return
+        if entity == "chat" and row.get("kind") == "codex" and row.get("hostId") in data["alias_hosts"]:
+            skipped.append({**item, "reason": "unresolved_client_alias"})
+            return
         source = key.split(":", 1)[0]
         host = row.get("hostId")
         if blocked(source, host, data):
@@ -212,7 +321,8 @@ def build_plan(snapshot, language="zh"):
     known = set(data["chats"])
     unlisted = [k for k in data["locations"] if (k.startswith("codex:thread:") or k.startswith("chatgpt:conversation:")) and k not in known]
     return {
-        "schemaVersion": 1, "language": language, "snapshotSha256": fingerprint(snapshot),
+        "schemaVersion": 2, "language": language, "snapshotSha256": fingerprint(snapshot),
+        "identityReconciliation": {"resolvedMemberships": data["resolved"], "unresolvedAliasHosts": sorted(data["alias_hosts"])},
         "targets": targets, "moves": moves, "protected": protected, "skipped": skipped,
         "sorting": {"chats": "updated_at"},
         "coverage": {"complete": False, "totalHistory": None, "listedProjects": len(data["projects"]),
@@ -233,6 +343,13 @@ def verify(before, after, plan):
         errors.append("pinned_section_position_changed")
     if plan["skipped"]:
         unknown.append("plan_contains_skipped_items")
+    if old["alias_hosts"] or new["alias_hosts"]:
+        unknown.append("unresolved_client_alias")
+    if old["resolved"] and not new["resolved"]:
+        old_resolved = {r["key"] for r in old["resolved"]}
+        # A client can graduate to canonical IDs; no proof is needed once native IDs agree.
+        if any(key not in new["locations"] for key in old_resolved):
+            unknown.append("identity_evidence_not_refreshed")
     for entity, fields in (("projects", ("projectId", "projectKind", "hostId", "path")),
                             ("chats", ("id", "kind", "hostId", "projectId", "pinnedIndex"))):
         for key, row in old[entity].items():
@@ -279,7 +396,11 @@ def verify(before, after, plan):
     actual = [s["name"] for sid, s in new["sections"].items() if sid not in DEFAULTS and sid != "pinned" and s["name"] in desired]
     if actual != desired:
         unknown.append("managed_section_order_or_creation_not_verified")
-    return {"schemaVersion": 1, "status": "failed" if errors else "incomplete" if unknown else "metadata_verified",
+    blocking_unknown = [item for item in unknown if item != "plan_contains_skipped_items"]
+    return {"schemaVersion": 2, "status": "failed" if errors else "incomplete" if unknown else "metadata_verified",
+            "operationChecksPassed": not errors and not blocking_unknown,
+            "excludedItemCount": len(plan["skipped"]),
+            "identityReconciliation": {"before": old["resolved"], "after": new["resolved"]},
             "confirmedMoves": confirmed, "errors": errors, "unverified": unknown,
             "historyComplete": False, "uiPlacement": "unverified", "collapse": "unverified", "opening": "unverified"}
 
@@ -290,18 +411,26 @@ def main():
     planner = sub.add_parser("plan", help="Generate a read-only plan")
     planner.add_argument("--input", required=True, type=Path)
     planner.add_argument("--language", choices=LABELS, default="zh")
+    capture = sub.add_parser("capture-identity", help="Add read-only local membership evidence for temporary IDs")
+    capture.add_argument("--input", required=True, type=Path)
+    capture.add_argument("--state", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / ".codex-global-state.json")
     checker = sub.add_parser("verify", help="Verify observed metadata against a plan")
     for name in ("before", "after", "plan"):
         checker.add_argument("--" + name, required=True, type=Path)
-    for command in (planner, checker):
+    for command in (planner, checker, capture):
         command.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
     read = lambda path: json.loads(path.read_text(encoding="utf-8-sig"))
     try:
-        inputs = [args.input] if args.command == "plan" else [args.before, args.after, args.plan]
+        inputs = [args.input, args.state] if args.command == "capture-identity" else [args.input] if args.command == "plan" else [args.before, args.after, args.plan]
         if args.output.resolve() in {path.resolve() for path in inputs}:
             raise ValueError("Output must not overwrite an input snapshot")
-        result = build_plan(read(args.input), args.language) if args.command == "plan" else verify(read(args.before), read(args.after), read(args.plan))
+        if args.command == "capture-identity":
+            result = capture_identity(read(args.input), args.state)
+        elif args.command == "plan":
+            result = build_plan(read(args.input), args.language)
+        else:
+            result = verify(read(args.before), read(args.after), read(args.plan))
         # Exclusive creation avoids accidental overwrites of a previous private receipt.
         with args.output.open("x", encoding="utf-8", newline="\n") as handle:
             json.dump(result, handle, ensure_ascii=False, indent=2)

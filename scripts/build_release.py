@@ -92,6 +92,20 @@ def smoke(path, script_relative):
         result_path = directory / "synthetic-verification.json"
         subprocess.run([sys.executable, str(script), "verify", "--before", str(before_path), "--after", str(after_path), "--plan", str(plan_path), "--output", str(result_path)], check=True, capture_output=True)
         assert json.loads(result_path.read_text(encoding="utf-8"))["status"] == "metadata_verified"
+        alias_native, alias_state = fixture_module.alias_fixture()
+        alias_input, state_path = directory / "alias-native.json", directory / "local-state.json"
+        alias_input.write_text(json.dumps(alias_native), encoding="utf-8")
+        state_path.write_text(json.dumps(alias_state), encoding="utf-8")
+        state_bytes = state_path.read_bytes()
+        alias_snapshot, alias_plan = directory / "alias-captured.json", directory / "alias-plan.json"
+        subprocess.run([sys.executable, str(script), "capture-identity", "--input", str(alias_input),
+                        "--state", str(state_path), "--output", str(alias_snapshot)], check=True, capture_output=True)
+        subprocess.run([sys.executable, str(script), "plan", "--input", str(alias_snapshot),
+                        "--output", str(alias_plan)], check=True, capture_output=True)
+        result = json.loads(alias_plan.read_text(encoding="utf-8"))
+        assert len(result["identityReconciliation"]["resolvedMemberships"]) == 1
+        assert not any(m.get("threadId") == "t-new" for m in result["moves"])
+        assert state_path.read_bytes() == state_bytes
 
 
 def main():

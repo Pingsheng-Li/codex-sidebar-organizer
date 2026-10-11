@@ -55,6 +55,12 @@ def simulate(snapshot, plan):
         for section in sections:
             section["itemKeys"] = [k for k in section["itemKeys"] if k != move["key"]]
         next(s for s in sections if s["name"] == move["targetName"])["itemKeys"].insert(0, move["key"])
+    # Model the workflow's native managed-section reorder, including reused groups.
+    names = [t["name"] for t in plan["targets"]]
+    slots = [i for i, s in enumerate(sections) if s["name"] in names]
+    managed = sorted((sections[i] for i in slots), key=lambda s: names.index(s["name"]))
+    for slot, section in zip(slots, managed):
+        sections[slot] = section
     after["sidebar"]["sidebarPreferences"]["sorting"]["chats"] = "updated_at"
     return after
 
@@ -249,6 +255,142 @@ class VerificationTests(unittest.TestCase):
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 0)
             self.assertEqual(subprocess.run(command, capture_output=True).returncode, 1)
             self.assertEqual(source.read_bytes(), initial)
+
+
+def alias_fixture():
+    before = fixture()
+    before["sidebar"]["sections"].append({"sectionId": "local-chats", "name": "本机 · 聊天",
+                                             "itemKeys": ["codex:thread:local:client-new-thread:temporary"]})
+    rows = [{"id": s["sectionId"], "name": s["name"], "itemKeys": list(s["itemKeys"])}
+            for s in before["sidebar"]["sections"] if s["sectionId"] not in planner.DEFAULTS | {"pinned"}]
+    rows[-1]["itemKeys"] = ["codex:thread:local:t-new"]
+    state = {"electron-persisted-atom-state": {"sidebar-custom-sections-v3": {"synthetic-account": {"sections": rows}}}}
+    return before, state
+
+
+def capture_fixture(snapshot, state):
+    with tempfile.TemporaryDirectory() as tmp:
+        path = Path(tmp) / "state.json"
+        path.write_text(json.dumps(state), encoding="utf-8")
+        return planner.capture_identity(snapshot, path)
+
+
+class IdentityReconciliationTests(unittest.TestCase):
+    def test_native_ghost_recents_resolved_by_persisted_membership(self):
+        before, state = alias_fixture()
+        enriched = capture_fixture(before, state)
+        plan = planner.build_plan(enriched)
+        self.assertNotIn("t-new", [m.get("threadId") for m in plan["moves"]])
+        self.assertIn({"key": "codex:thread:local:t-new", "entity": "chat", "reason": "already_filed"}, plan["protected"])
+        self.assertEqual(plan["identityReconciliation"]["resolvedMemberships"], [{"key": "codex:thread:local:t-new", "sectionId": "local-chats"}])
+        self.assertEqual(before["sidebar"]["sections"][-1]["itemKeys"], ["codex:thread:local:client-new-thread:temporary"])
+
+    def test_without_evidence_local_moves_are_blocked(self):
+        before, _ = alias_fixture()
+        plan = planner.build_plan(before)
+        self.assertIn("unresolved_client_alias", [s["reason"] for s in plan["skipped"]])
+        self.assertFalse(any(m.get("source") == "codex" for m in plan["moves"] if m["entity"] == "chat"))
+
+    def test_two_pass_verification_uses_fresh_evidence(self):
+        before, state = alias_fixture()
+        # Other eligible items are filed in the modeled first pass.
+        first = capture_fixture(before, state)
+        first_plan = planner.build_plan(first)
+        after = simulate(first, first_plan)
+        after.pop("identityEvidence")
+        state_rows = [{"id": s["sectionId"], "name": s["name"], "itemKeys": list(s["itemKeys"])}
+                      for s in after["sidebar"]["sections"] if s["sectionId"] not in planner.DEFAULTS | {"pinned"}]
+        next(s for s in state_rows if s["id"] == "local-chats")["itemKeys"] = ["codex:thread:local:t-old", "codex:thread:local:t-new"]
+        state["electron-persisted-atom-state"]["sidebar-custom-sections-v3"]["synthetic-account"]["sections"] = state_rows
+        after = capture_fixture(after, state)
+        self.assertEqual(planner.verify(first, after, first_plan)["status"], "metadata_verified")
+        again = planner.build_plan(after)
+        self.assertEqual(again["moves"], [])
+        self.assertTrue(all(t["state"] == "reuse" for t in again["targets"]))
+        self.assertTrue(planner.verify(after, capture_fixture(after, state), again)["operationChecksPassed"])
+
+    def test_state_file_and_native_snapshot_unchanged(self):
+        before, state = alias_fixture()
+        original = copy.deepcopy(before)
+        with tempfile.TemporaryDirectory() as tmp:
+            path = Path(tmp) / "state.json"
+            state["unrelated-secret"] = "must-not-be-exported"
+            path.write_text(json.dumps(state), encoding="utf-8")
+            initial = path.read_bytes()
+            result = planner.capture_identity(before, path)
+            self.assertEqual(initial, path.read_bytes())
+            self.assertEqual(before, original)
+            self.assertNotIn("must-not-be-exported", json.dumps(result))
+
+    def test_wrong_scope_or_ambiguous_account_rejected(self):
+        for variant in ("name", "id", "two-accounts"):
+            before, state = alias_fixture()
+            scopes = state["electron-persisted-atom-state"]["sidebar-custom-sections-v3"]
+            if variant == "two-accounts":
+                scopes["another"] = copy.deepcopy(scopes["synthetic-account"])
+            else:
+                scopes["synthetic-account"]["sections"][0][variant] = "different"
+            with self.assertRaises(ValueError):
+                capture_fixture(before, state)
+
+    def test_conflict_duplicate_pin_remote_and_unknown_identity_rejected(self):
+        for variant in ("stable-conflict", "duplicate", "pinned", "remote", "not-listed", "still-alias"):
+            before, state = alias_fixture()
+            rows = state["electron-persisted-atom-state"]["sidebar-custom-sections-v3"]["synthetic-account"]["sections"]
+            if variant == "stable-conflict":
+                rows[0]["itemKeys"] = ["chatgpt:conversation:different"]
+            elif variant == "duplicate":
+                rows[-1]["itemKeys"].append(rows[-1]["itemKeys"][0])
+            elif variant == "pinned":
+                before["sidebar"]["pinnedThreads"].append(copy.deepcopy(before["sidebar"]["threads"][0]))
+            elif variant == "remote":
+                before["sidebar"]["threads"][0]["hostId"] = "server"
+                before["sidebar"]["sections"][-1]["itemKeys"] = ["codex:thread:server:client-new-thread:temporary"]
+                rows[-1]["itemKeys"] = ["codex:thread:server:t-new"]
+            elif variant == "not-listed":
+                rows[-1]["itemKeys"] = ["codex:thread:local:missing"]
+            else:
+                rows[-1]["itemKeys"] = ["codex:thread:local:client-new-thread:temporary"]
+            with self.subTest(variant=variant), self.assertRaises(ValueError):
+                capture_fixture(before, state)
+
+    def test_stale_evidence_rejected(self):
+        before, state = alias_fixture()
+        snapshot = capture_fixture(before, state)
+        snapshot["sidebar"]["threads"][0]["updatedAt"] = "changed"
+        with self.assertRaises(ValueError):
+            planner.build_plan(snapshot)
+
+    def test_canonical_graduation_does_not_require_old_alias(self):
+        before, state = alias_fixture()
+        before = capture_fixture(before, state)
+        plan = planner.build_plan(before)
+        normalized, _ = planner.reconcile(before)
+        after = simulate(normalized, plan)
+        self.assertEqual(planner.verify(before, after, plan)["status"], "metadata_verified")
+
+    def test_no_alias_does_not_read_state(self):
+        before = fixture()
+        self.assertEqual(planner.capture_identity(before, Path("does-not-exist")), before)
+
+    def test_missing_after_evidence_cannot_report_success(self):
+        before, state = alias_fixture()
+        enriched = capture_fixture(before, state)
+        plan = planner.build_plan(enriched)
+        after = simulate(before, plan)
+        report = planner.verify(enriched, after, plan)
+        self.assertFalse(report["operationChecksPassed"])
+        self.assertIn("unresolved_client_alias", report["unverified"])
+
+    def test_skips_are_reported_separately_from_operation_checks(self):
+        before = fixture()
+        before["sidebar"]["threads"].append({"id": "backing", "kind": "codex", "hostId": "durable", "projectId": None})
+        plan = planner.build_plan(before)
+        report = planner.verify(before, simulate(before, plan), plan)
+        self.assertEqual(report["status"], "incomplete")
+        self.assertTrue(report["operationChecksPassed"])
+        self.assertEqual(report["excludedItemCount"], 1)
+        self.assertFalse(report["historyComplete"])
 
 
 if __name__ == "__main__":

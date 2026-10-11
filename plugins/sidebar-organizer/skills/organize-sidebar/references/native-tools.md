@@ -49,7 +49,7 @@ Section keys recognized by the helper:
 - `codex:project:<projectId>` / `chatgpt:project:<projectId>`
 - `codex:thread:<hostId>:<id>` / `chatgpt:conversation:<id>`
 
-The helper constructs keys from exact native fields and demands exact section membership evidence. An entry absent from all sections, in multiple sections, or using a client alias it cannot resolve is skipped. A pinned entry remains protected even if it also appears in `threads`. A chat with **any nonempty projectId** remains protected even if that project is absent from this snapshot.
+The helper constructs keys from exact native fields and demands exact section membership evidence. An entry absent from all sections or in multiple sections is skipped. Unresolved `client-new-thread:` aliases block unfiled Codex chats on the affected host until exact membership evidence is available. A pinned entry remains protected even if it also appears in `threads`. A chat with **any nonempty projectId** remains protected even if that project is absent from this snapshot.
 
 Remote IDs must occur on a `local` or `remote` project with a nonlocal host. `durable`, `cloud`, and `unknown` are not physical host evidence. Sources/hosts listed as unavailable block dependent moves; ambiguous availability representations fail closed.
 
@@ -64,3 +64,15 @@ Plan JSON is data for the agent, **not an executable job queue or authorization 
 For manual review, a plan entry records `key`, stable IDs, native source/host (chats), `fromSection`, and `targetName`. Section creation gives the target name a real native section ID. The helper verifies destinations by unique section name in the fresh after-snapshot; ambiguous names fail verification.
 
 If the current client returns a substantially different object layout, report the mismatch and adapt the adapter from its documented live schema. Do not silently coerce missing arrays to empty lists, infer sources from titles, or treat a successful process exit as successful UI organization.
+
+## Read-only identity evidence (0.1.1)
+
+An observed desktop mismatch can expose `codex:thread:local:client-new-thread:<temporary>` inside a custom section while the same saved membership uses `codex:thread:local:<canonical>`. The native list may simultaneously place the canonical chat in default Recents. Calling `read_thread` on the temporary ID does not necessarily resolve it; repeating a successful move also need not change the list response.
+
+The optional `capture-identity` command reads the single current `.codex-global-state.json` file. This is a **version-sensitive local compatibility adapter**, not a public sidebar API. It does not write client state, load chat databases, or enumerate history. Its only exported local fields come from `electron-persisted-atom-state.sidebar-custom-sections-v3[scope].sections`: `id`, `name`, `itemKeys`. Scope/account IDs, paths, other settings, and conversation content are not exported.
+
+Each private augmented snapshot adds `identityEvidence` with source `local-sidebar-custom-sections-v3`, `nativeSnapshotSha256`, and projected section rows using `sectionId`. A unique scope must match the complete custom-section ID/name inventory. Every stable native member must agree; alias counts must match the remaining saved canonical members by host; those canonical members must exist in the native list. Only `local` hosts are supported. Pins, conflicting custom placement, duplicate members, multiple matching scopes, and stale snapshot hashes fail closed.
+
+The helper then normalizes a copy of section membership and removes only the proven custom members' default-section duplicates. It does not infer which individual temporary token represents which canonical ID, change a host/source, alter the supplied snapshot, or modify any client file. Evidence must be freshly captured on **both** sides of verification and again on each subsequent run. Do not accept evidence from downloaded plans or public issue attachments. A file that is missing, malformed, or from an unsupported client version leaves the alias unresolved.
+
+Version 2 plan/report fields include `identityReconciliation.resolvedMemberships` in plans, before/after reconciliation in reports, `operationChecksPassed`, and `excludedItemCount`. `operationChecksPassed` may be true while the overall `status` is `incomplete` only because already-skipped records remain outside coverage; this does not turn excluded identities or history into verified items. Verify still returns exit code 2 for incomplete coverage and 1 for invalid input. Check structured operation results explicitly when assessing a scoped regression.
