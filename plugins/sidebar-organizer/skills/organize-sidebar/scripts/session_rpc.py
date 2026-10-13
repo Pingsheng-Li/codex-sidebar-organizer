@@ -25,10 +25,16 @@ def safe_text(value, limit=1000):
 
 
 class AppServer:
-    def __init__(self, codex="codex", config=(), timeout=15.0):
+    def __init__(self, codex="codex", config=(), timeout=15.0, launch_argv=None):
         if not math.isfinite(timeout) or timeout <= 0:
             raise ValueError("Timeout must be a finite positive number")
         self.codex, self.config, self.timeout = codex, tuple(config), timeout
+        if launch_argv is not None:
+            if (not isinstance(launch_argv, (list, tuple)) or not launch_argv
+                    or any(not isinstance(arg, str) or not arg or "\0" in arg for arg in launch_argv)):
+                raise RpcError("Transport command must be a nonempty argv sequence without NUL characters")
+            launch_argv = tuple(launch_argv)
+        self.launch_argv = launch_argv
         self.process = None
         self._next_id = 0
         self._initialized = False
@@ -39,13 +45,17 @@ class AppServer:
         self._messages = queue.Queue(maxsize=128)
         self._stop = threading.Event()
         self._stderr = b""
-        argv = [self.codex]
-        for value in self.config:
-            argv.extend(("-c", value))
-        argv.extend(("app-server", "--listen", "stdio://"))
         child_env = dict(os.environ)
-        if "CODEX_HOME" in child_env:
-            child_env["CODEX_HOME"] = str(Path(child_env["CODEX_HOME"]).expanduser().resolve())
+        if self.launch_argv is not None:
+            argv = list(self.launch_argv)
+            child_env.pop("CODEX_HOME", None)
+        else:
+            argv = [self.codex]
+            for value in self.config:
+                argv.extend(("-c", value))
+            argv.extend(("app-server", "--listen", "stdio://"))
+            if "CODEX_HOME" in child_env:
+                child_env["CODEX_HOME"] = str(Path(child_env["CODEX_HOME"]).expanduser().resolve())
         try:
             self.process = subprocess.Popen(argv, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                             stderr=subprocess.PIPE, bufsize=0, env=child_env)

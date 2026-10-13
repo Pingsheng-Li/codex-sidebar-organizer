@@ -130,6 +130,22 @@ class AppServerTests(unittest.TestCase):
                     self.assertEqual(self.environments[-1]["CODEX_HOME"], str(Path(configured).expanduser().resolve()))
                     self.assertEqual(os.environ["CODEX_HOME"], configured)
 
+    def test_explicit_transport_reuses_rpc_without_forwarding_local_codex_home(self):
+        self.start([{"result": {"data": [{"id": "remote-session", "source": "cli"}]}}])
+        argv = ["ssh", "-T", "lab", "exec remote-codex app-server --listen stdio://"]
+        with patch.dict(os.environ, {"CODEX_HOME": "~/local-only"}):
+            with rpc.AppServer(launch_argv=argv, timeout=1) as server:
+                self.assertEqual(server.list_threads(), [{"id": "remote-session", "source": "cli"}])
+            self.assertNotIn("CODEX_HOME", self.environments[-1])
+            self.assertEqual(os.environ["CODEX_HOME"], "~/local-only")
+        self.assertEqual(self.argv[-1], argv)
+        self.assertIsNotNone(self.processes[-1].poll())
+
+    def test_invalid_transport_argv_is_rejected(self):
+        for argv in ([], "ssh lab", [""], ["ssh", "bad\x00"]):
+            with self.subTest(argv=argv), self.assertRaises(rpc.RpcError):
+                rpc.AppServer(launch_argv=argv)
+
     def test_rpc_error_is_bounded_sanitized_and_excludes_error_data(self):
         with self.start([{"error": {"code": -32602, "message": "invalid \x1b[31multra\x00 setting", "data": "SECRET"}}]) as server:
             with self.assertRaises(rpc.RpcError) as caught:
