@@ -1,11 +1,11 @@
 ---
 name: organize-sidebar
-description: Organize Codex desktop sidebar projects and chats by verified source, preserving pins, project membership, and manual groups. Also browse, group, and resume local Codex sessions in a terminal through a separate CLI catalog. Use for sidebar cleanup, 分类整理聊天, 项目分组, CLI 会话整理, or 自动归档 meaning filing. Refresh checks are observation only; automatic deletion sync is unsupported. Desktop organization requires native desktop tools.
+description: Organize Codex desktop sidebar projects and chats by verified source, preserving pins, project membership, and manual groups. Also browse, group, and resume local or SSH remote Codex sessions in a terminal through a separate CLI catalog. Use for sidebar cleanup, 分类整理聊天, 项目分组, CLI 会话整理, or 自动归档 meaning filing. Refresh checks are observation only; automatic deletion sync is unsupported. Desktop organization requires native desktop tools.
 ---
 
 # Organize the sidebar
 
-For an explicit CLI or terminal session-catalog request, first read [CLI browsing, groups, and resume](references/cli.md) and follow that workflow. CLI groups are independent of desktop sections. Do not silently substitute CLI catalog work for a desktop request, or desktop organization for a CLI request. If the requested surface is unclear, establish it before changing groups.
+For an explicit CLI or terminal session-catalog request, first read [CLI browsing, groups, and resume](references/cli.md) and follow that workflow. It supports the local host or one user-selected SSH host per command. CLI groups stay local and are independent of desktop sections; remote scopes include the SSH identity and remote Codex home. Do not silently substitute CLI catalog work for a desktop request, or desktop organization for a CLI request. If the requested surface is unclear, establish it before changing groups.
 
 Treat “archive / 自动归档” in this workflow as **filing into sidebar sections**. Do not hide, archive, delete, rename, or change chat content, project paths, or project membership. Default to one on-demand run. Do not create a schedule unless explicitly requested.
 

@@ -15,7 +15,7 @@ PLUGIN = ROOT / "plugins/sidebar-organizer"
 SKILL = PLUGIN / "skills/organize-sidebar"
 SKILL_FILES = ["SKILL.md", "agents/openai.yaml", "references/native-tools.md", "references/refresh.md",
                "references/cli.md", "scripts/sidebar_plan.py", "scripts/session_cli.py",
-               "scripts/session_rpc.py", "scripts/session_groups.py"]
+               "scripts/session_rpc.py", "scripts/session_groups.py", "scripts/session_remote.py"]
 
 
 def checked_bytes(path):
@@ -83,7 +83,10 @@ def smoke(path, script_relative):
             archive.extractall(directory)
         script = directory / script_relative
         session_cli = script.with_name("session_cli.py")
-        subprocess.run([sys.executable, str(session_cli), "--help"], check=True, capture_output=True)
+        help_result = subprocess.run([sys.executable, str(session_cli), "--help"],
+                                     check=True, capture_output=True, text=True)
+        assert all(option in help_result.stdout for option in
+                   ("--host", "--remote-home", "--ssh-control-path"))
         group_file = directory / "cli-groups.json"
         listing = subprocess.run([sys.executable, str(session_cli), "--data-file", str(group_file),
                                   "group", "list"], check=True, capture_output=True, text=True)
@@ -164,6 +167,8 @@ def main():
                "No server/API key; optional helper needs Python 3.10+.\n\n"
                "Development CLI: python <skill-dir>/scripts/session_cli.py browse\n"
                "Requires Python 3.10+ and Codex app-server. Groups are independent of desktop sections.\n"
+               "Remote CLI: add --host <ssh-alias> before browse; uses system OpenSSH and remote Codex.\n"
+               "Establish SSH key/agent authentication and host-key trust first. No remote Python required.\n"
                "See references/cli.md for filters, saved groups, and session resume.\n\n"
                "Full Chinese/English instructions: https://github.com/VeraPyuyi/codex-sidebar-organizer\n").encode("utf-8")
     skill_entries = {"organize-sidebar/" + file: checked_bytes(SKILL / file) for file in SKILL_FILES}

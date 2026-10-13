@@ -4,7 +4,7 @@
 
 A skills-only plugin that files desktop projects and chats into native sections by verified source. No server, API key, or extra MCP service. “Archive” means sidebar filing here: it does not hide, delete, or archive conversations.
 
-The local development branch also includes a [CLI session catalog](#cli-session-catalog-development-branch) for browsing, grouping, and resuming local sessions. The published GitHub v0.1.3 release does not include this new feature.
+The development branch also includes a [CLI session catalog](#cli-session-catalog-development-branch) for browsing, grouping, and resuming local or SSH remote sessions. The published GitHub v0.1.3 release does not include this new feature.
 
 ## Install
 
@@ -55,9 +55,26 @@ python3 scripts/session_cli.py resume SESSION_ID
 
 In an interactive terminal, `browse` lets you select a session by number and runs `codex resume`. Replace `SESSION_ID` with a listed ID; `resume` also accepts a unique ID prefix. The default catalog includes CLI, VS Code, exec, and app-server sessions, excluding subagents. Projects use exact working directories; source means the session entry point, not its physical creation computer.
 
-Custom groups live in a separate local JSON file, scoped by `CODEX_HOME`. They do not sync desktop groups or aggregate other computers. By default, the catalog paginates available sessions in the current Codex home and selected filters; the official app-server scans local logs and repairs its index. The organizer only projects returned metadata and does not directly parse or edit client files. Use `python3 scripts/session_cli.py --index-only list` to read only the existing state index, which may omit older, unindexed sessions.
+Custom groups live in a separate local JSON file, scoped by `CODEX_HOME`. By default, the catalog paginates available sessions in the selected Codex home and filters; the official app-server scans that host's logs and repairs its index. The organizer only projects returned metadata and does not directly parse or edit client files. Use `python3 scripts/session_cli.py --index-only list` to read only the existing state index, which may omit older, unindexed sessions.
 
 Put global options before the subcommand. If your CLI rejects `ultra` in its configuration, use the temporary override `python3 scripts/session_cli.py -c 'model_reasoning_effort="xhigh"' list` without changing the config file. See [CLI usage](plugins/sidebar-organizer/skills/organize-sidebar/references/cli.md) for filters, storage, and running from an installed skill. The v0.1.3 installation commands above still install the released desktop plugin.
+
+### SSH remote sessions
+
+The local machine needs Python 3.10+ and OpenSSH. The remote machine needs an authenticated Codex CLI and a POSIX shell (Linux/macOS); it does not need this project or Python. First log in with `ssh devbox` to confirm the host key and set up key or SSH agent authentication, where `devbox` is your SSH configuration alias. The organizer uses noninteractive authentication: it does not prompt for passwords or automatically accept new host keys.
+
+```sh
+python3 scripts/session_cli.py --host devbox list --source cli
+python3 scripts/session_cli.py --host devbox group add "Research" SESSION_ID
+python3 scripts/session_cli.py --host devbox browse --group "Research"
+python3 scripts/session_cli.py --host devbox resume SESSION_ID --dry-run
+```
+
+`browse` and `resume` use interactive SSH to continue in the remote session's original working directory. If the remote noninteractive shell cannot find `codex`, pass `--codex /absolute/path/to/codex`. Select another remote Codex home with `--remote-home /home/user/.codex-other`. Remote `--cwd` also requires an absolute POSIX path; `-c` overrides apply to the remote Codex process.
+
+Each command targets one host. Remote groups stay on the local machine, scoped by the effective SSH hostname, user, port, and actual remote `CODEX_HOME`. The catalog does not combine machines, copy session logs, or sync desktop groups. `--dry-run` connects to list sessions and check the remote working directory, then prints the resume command without starting a conversation.
+
+For MFA such as Duo, authenticate in your own terminal first, then reuse the connection with `--ssh-control-path PATH`. See [SSH usage](plugins/sidebar-organizer/skills/organize-sidebar/references/cli.md#remote-sessions-over-ssh) for commands to create and close a private socket.
 
 ## Behavior
 
@@ -94,7 +111,7 @@ Version 0.1.1 fixes temporary `client-new-thread:` IDs using a read-only local m
 
 The earlier 0.1.1 live Windows passes each reconciled the already-filed temporary-ID chat with zero new groups, zero moves, and zero operation-check errors. Existing sections, pins, and project membership stayed unchanged. Its 20 previously excluded records are now covered by the separate 0.1.2 cloud regression. Older history remains outside coverage; operation success is reported separately from overall completeness.
 
-No telemetry, credentials, network client, or remote service is bundled. Native desktop tools perform sidebar changes; the CLI catalog reads metadata through local `codex app-server`. Private metadata snapshots may be saved temporarily on the user's computer for verification; never publish them. Native identity reads may also return messages; the desktop workflow projects only identity fields and does not use or retain bodies. The CLI catalog does not read full conversations or display message previews; it displays session names, or `Untitled` when absent. The host's own service and data handling still apply.
+No telemetry, credentials, or remote service is bundled. Native desktop tools perform sidebar changes; the CLI catalog reads metadata through local `codex app-server` or a remote app-server over system OpenSSH. Private metadata snapshots may be saved temporarily on the user's computer for verification; never publish them. Native identity reads may also return messages; the desktop workflow projects only identity fields and does not use or retain bodies. The CLI catalog does not read full conversations or display message previews; it displays session names, or `Untitled` when absent. The host's own service and data handling still apply.
 
 The optional desktop helper `sidebar_plan.py` uses Python 3.10+ and the standard library to plan and verify; it cannot move sidebar items. If Python is missing, the agent can follow the desktop skill directly. The CLI catalog requires Python. All tests use synthetic data.
 

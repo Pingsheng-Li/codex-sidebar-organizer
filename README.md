@@ -4,7 +4,7 @@
 
 在支持原生侧边栏工具的 Codex 桌面会话中，一句话按来源收纳项目和聊天。适合多台电脑、ChatGPT 云端项目和大量「最近」聊天混在一起的情况。
 
-本地开发分支还提供 [CLI 会话目录](#cli-会话目录开发分支)，用于在终端浏览、分组和继续本机会话；GitHub 已发布的 v0.1.3 不包含这项新功能。
+开发分支还提供 [CLI 会话目录](#cli-会话目录开发分支)，用于在终端浏览、分组和继续本机或 SSH 远端会话；GitHub 已发布的 v0.1.3 不包含这项新功能。
 
 这是一个轻量技能插件：无需服务器、API Key 或额外 MCP 服务。**“自动归档”指分类收纳；不隐藏、删除或真正归档聊天。** 每次调用执行一轮，后续新增聊天可再次整理。也支持按需启用后台定时核对；目前不能自动同步网页端的删除。
 
@@ -99,9 +99,26 @@ python3 scripts/session_cli.py resume SESSION_ID
 
 `browse` 在交互终端中按编号选择会话并运行 `codex resume`。`SESSION_ID` 换成列表中的真实 ID；`resume` 也接受唯一的 ID 前缀。默认列出 CLI、VS Code、exec 和 app-server 入口的会话，不含子代理。项目按完整工作目录区分，来源表示会话入口，不代表创建它的物理电脑。
 
-自定义分组存入独立的本地 JSON，并按 `CODEX_HOME` 隔离；不会同步桌面分组或汇总其他电脑。目录默认通过官方 app-server 分页枚举当前 Codex 主目录及筛选范围内的可用会话，由官方接口扫描本地日志并修复索引。整理器只提取返回的元数据，不直接解析或修改客户端原始文件。若只需已有状态索引，可运行 `python3 scripts/session_cli.py --index-only list`；该模式可能遗漏未入索引的旧会话。
+自定义分组存入独立的本地 JSON，并按 `CODEX_HOME` 隔离。目录默认通过官方 app-server 分页枚举所选 Codex 主目录及筛选范围内的可用会话，由官方接口扫描该主机上的日志并修复索引。整理器只提取返回的元数据，不直接解析或修改客户端原始文件。若只需已有状态索引，可运行 `python3 scripts/session_cli.py --index-only list`；该模式可能遗漏未入索引的旧会话。
 
 全局参数放在子命令前。如果本机 Codex CLI 提示不支持配置中的 `ultra`，可临时运行 `python3 scripts/session_cli.py -c 'model_reasoning_effort="xhigh"' list`，无需修改配置文件。筛选、数据文件位置和已安装技能的运行方法见 [CLI 使用说明](plugins/sidebar-organizer/skills/organize-sidebar/references/cli.md)。上面的 v0.1.3 安装命令仍安装已发布的桌面插件。
+
+### SSH 远端会话
+
+本机需要 Python 3.10+ 和 OpenSSH；远端需要已登录的 Codex CLI 和 POSIX shell（Linux/macOS），无需安装本项目或 Python。先用 `ssh devbox` 正常登录一次，确认主机密钥并配置密钥或 SSH agent 认证；`devbox` 是你的 SSH 配置别名。整理器使用非交互认证，不提示密码，也不自动接受新主机密钥。
+
+```sh
+python3 scripts/session_cli.py --host devbox list --source cli
+python3 scripts/session_cli.py --host devbox group add "论文" SESSION_ID
+python3 scripts/session_cli.py --host devbox browse --group "论文"
+python3 scripts/session_cli.py --host devbox resume SESSION_ID --dry-run
+```
+
+`browse` 或 `resume` 通过交互 SSH 在远端原工作目录继续会话。远端非交互 shell 找不到 `codex` 时，用 `--codex /absolute/path/to/codex` 指定；另一个 Codex 主目录可用 `--remote-home /home/user/.codex-other`。远端 `--cwd` 也必须是绝对 POSIX 路径，`-c` 配置覆盖传给远端 Codex。
+
+每次操作一台主机；远端分组仍保存在本机，按 SSH 实际主机名、用户、端口和远端实际 `CODEX_HOME` 隔离。不会汇总多机列表、复制会话日志或同步桌面分组。`--dry-run` 会连接远端列出会话并检查工作目录，再输出恢复命令，不启动对话。
+
+需要 MFA（如 Duo）时，先在自己的终端完成 SSH 认证，再用 `--ssh-control-path PATH` 复用已认证的连接；私有 socket 的创建和关闭命令见 [SSH 使用说明](plugins/sidebar-organizer/skills/organize-sidebar/references/cli.md#remote-sessions-over-ssh)。
 
 ## 0.1.3：刷新核对与后台检查
 
@@ -136,7 +153,7 @@ python3 scripts/session_cli.py resume SESSION_ID
 
 ## 隐私与实现
 
-插件没有网络客户端、遥测、凭据或远程执行服务。桌面整理使用宿主已有的桌面工具；CLI 会话目录通过本机 `codex app-server` 读取元数据。助手可能在本机临时目录保存 ID、路径和分组信息以供核对；这些属于私人记录，不应提交到 GitHub。原生身份读取工具可能同时返回消息内容，整理流程只提取身份字段，不使用或保存正文。CLI 目录不读取完整对话、不展示消息预览，标题仅用会话名称，缺失时显示 `Untitled`。宿主 Codex/ChatGPT 的服务和数据处理方式仍由宿主决定。
+插件不附带遥测、凭据或远程执行服务。桌面整理使用宿主已有的桌面工具；CLI 会话目录通过本机 `codex app-server`，或通过系统 OpenSSH 连接远端 app-server 读取元数据。助手可能在本机临时目录保存 ID、路径和分组信息以供核对；这些属于私人记录，不应提交到 GitHub。原生身份读取工具可能同时返回消息内容，整理流程只提取身份字段，不使用或保存正文。CLI 目录不读取完整对话、不展示消息预览，标题仅用会话名称，缺失时显示 `Untitled`。宿主 Codex/ChatGPT 的服务和数据处理方式仍由宿主决定。
 
 存在临时 ID 时，可选辅助程序还会只读加载当前 Codex 主目录中的 `.codex-global-state.json`，从中提取匹配的分组记录作为证据。不会导出该文件的其他设置，不会搜集其他账户或历史备份。
 
