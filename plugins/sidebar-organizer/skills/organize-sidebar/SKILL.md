@@ -1,9 +1,11 @@
 ---
 name: organize-sidebar
-description: Organize Codex desktop sidebar projects and chats by verified source, preserving pins, project membership, and manual groups. Use for sidebar cleanup, 分类整理聊天, 项目分组, or 自动归档 meaning filing. Also use for 刷新侧边栏, refresh checks, or explicitly requested background checks. Refresh is observation only; automatic deletion sync is unsupported. Requires native desktop tools.
+description: Organize Codex desktop sidebar projects and chats by verified source, preserving pins, project membership, and manual groups. Also browse, group, and resume local Codex sessions in a terminal through a separate CLI catalog. Use for sidebar cleanup, 分类整理聊天, 项目分组, CLI 会话整理, or 自动归档 meaning filing. Refresh checks are observation only; automatic deletion sync is unsupported. Desktop organization requires native desktop tools.
 ---
 
 # Organize the sidebar
+
+For an explicit CLI or terminal session-catalog request, first read [CLI browsing, groups, and resume](references/cli.md) and follow that workflow. CLI groups are independent of desktop sections. Do not silently substitute CLI catalog work for a desktop request, or desktop organization for a CLI request. If the requested surface is unclear, establish it before changing groups.
 
 Treat “archive / 自动归档” in this workflow as **filing into sidebar sections**. Do not hide, archive, delete, rename, or change chat content, project paths, or project membership. Default to one on-demand run. Do not create a schedule unless explicitly requested.
 
@@ -13,7 +15,7 @@ For refresh or web-deletion synchronization requests, first read [refresh checks
 
 Discover the native desktop tools by their function names, allowing namespace prefixes to vary. Require `list_threads`, `list_projects`, `create_sidebar_section`, `move_thread_to_sidebar_section`, and `move_project_to_sidebar_section`. Read their live schemas before calling. Check for `reorder_sidebar_sections`, `update_sidebar_preferences`, and `reorder_section` separately.
 
-If listing or moving tools are unavailable, explain that this session cannot organize the desktop sidebar. Installing a skill in CLI or ChatGPT web does not grant desktop capabilities. Give the installation/use instructions; do not substitute private HTTP APIs, cookies, local database edits, app code changes, or global-state file edits.
+If listing or moving tools are unavailable, explain that this session cannot organize the desktop sidebar. Installing a skill in CLI or ChatGPT web does not grant desktop capabilities. Explain the separate CLI catalog when relevant and follow it only if the user's request covers CLI sessions. Otherwise give desktop installation/use instructions; do not substitute private HTTP APIs, cookies, local database edits, app code changes, or global-state file edits.
 
 Default to the current desktop, source-based grouping, recent-update ordering, and one run. Use the user's language for section names; the helper supports `zh` and `en`. Do not carry over this author's counts, machine names, IDs, or paths. If the user asks for a preview, make no changes. An explicit request to organize authorizes these reversible moves: announce the concrete scope and proceed without asking again.
 

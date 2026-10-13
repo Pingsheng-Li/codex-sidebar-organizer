@@ -1,5 +1,27 @@
 # Validation scope — 0.1.3
 
+## Development branch: CLI session catalog
+
+The CLI extension adds 38 synthetic tests (99 total) for the native JSONL handshake,
+paginated metadata listing, all-provider queries, optional index-only mode,
+timeouts and subprocess cleanup, independent group storage, command selection,
+TTY handling, safe argument passing, and resume dry runs. The existing 61 desktop
+tests remain unchanged. Both extracted release packages load the CLI and its
+dependencies and run a local group-list smoke check without accessing an account.
+
+On macOS with Codex CLI 0.133.0, native listing and a resume dry run were verified.
+The real interactive resume was not launched. The installed CLI required an explicit
+temporary `model_reasoning_effort="xhigh"` override for a configuration using `ultra`.
+The first index-only read was empty; normal native scan-and-repair found available
+sessions. Listing therefore defaults to the official scan-and-repair behavior,
+with `--index-only` available explicitly. App-server needs permission to maintain
+its own state database even when the organizer only requests metadata.
+
+CLI groups were tested with synthetic identities in temporary files. No real
+desktop groups or session content were changed by the organizer. Returned records
+cover the current Codex home and selected filters, not other computers or all
+account history. Saved CLI groups remain independent of desktop sections.
+
 The workflow was designed against native desktop tool schemas observed on 2026-10-11. It does not guarantee that another account, platform, client version, or session exposes those tools. Discovery and capability checks are mandatory at runtime.
 
 ## 0.1.3 refresh checks

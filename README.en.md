@@ -4,6 +4,8 @@
 
 A skills-only plugin that files desktop projects and chats into native sections by verified source. No server, API key, or extra MCP service. “Archive” means sidebar filing here: it does not hide, delete, or archive conversations.
 
+The local development branch also includes a [CLI session catalog](#cli-session-catalog-development-branch) for browsing, grouping, and resuming local sessions. The published GitHub v0.1.3 release does not include this new feature.
+
 ## Install
 
 With a Codex version supporting plugin commands:
@@ -37,6 +39,26 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 
 Open a fresh desktop session to load the updated skill. Standalone skill users should back up and replace the skill folder instead.
 
+## CLI session catalog (development branch)
+
+Requires Python 3.10+ and a Codex CLI supporting `codex app-server`. From the repository root:
+
+```sh
+python3 scripts/session_cli.py list --group-by project
+python3 scripts/session_cli.py list --group-by source --source cli
+python3 scripts/session_cli.py browse
+python3 scripts/session_cli.py group add "Research" SESSION_ID
+python3 scripts/session_cli.py list --group-by group
+python3 scripts/session_cli.py resume SESSION_ID --dry-run
+python3 scripts/session_cli.py resume SESSION_ID
+```
+
+In an interactive terminal, `browse` lets you select a session by number and runs `codex resume`. Replace `SESSION_ID` with a listed ID; `resume` also accepts a unique ID prefix. The default catalog includes CLI, VS Code, exec, and app-server sessions, excluding subagents. Projects use exact working directories; source means the session entry point, not its physical creation computer.
+
+Custom groups live in a separate local JSON file, scoped by `CODEX_HOME`. They do not sync desktop groups or aggregate other computers. By default, the catalog paginates available sessions in the current Codex home and selected filters; the official app-server scans local logs and repairs its index. The organizer only projects returned metadata and does not directly parse or edit client files. Use `python3 scripts/session_cli.py --index-only list` to read only the existing state index, which may omit older, unindexed sessions.
+
+Put global options before the subcommand. If your CLI rejects `ultra` in its configuration, use the temporary override `python3 scripts/session_cli.py -c 'model_reasoning_effort="xhigh"' list` without changing the config file. See [CLI usage](plugins/sidebar-organizer/skills/organize-sidebar/references/cli.md) for filters, storage, and running from an installed skill. The v0.1.3 installation commands above still install the released desktop plugin.
+
 ## Behavior
 
 - Creates/reuses Local Projects, ChatGPT Cloud Projects, Local Chats, ChatGPT Cloud Chats, and Source Unconfirmed sections, with separate verified remote-host sections when applicable.
@@ -48,7 +70,7 @@ Open a fresh desktop session to load the updated skill. Standalone skill users s
 
 ## Requirements and limits
 
-Run in a desktop session exposing native sidebar list/create/move tools. Installing this package does not provide those capabilities in standalone CLI, ChatGPT web, or unsupported desktop versions. The CLI commands above install the package; they do not organize the sidebar.
+Desktop organization requires a desktop session exposing native sidebar list/create/move tools. Installing this package does not provide those capabilities in standalone CLI, ChatGPT web, or unsupported desktop versions. The `codex plugin` commands install the package; the development branch's CLI catalog uses separate groups.
 
 The tested list tool returns up to 50 recent non-pinned chats and has no history cursor. The skill checks for supported history enumeration, but reports older history as **not covered, total unknown** when unavailable. A cloud record does not identify a creation browser or computer; “local” means the current execution host. Unknown physical provenance is not guessed from titles.
 
@@ -72,9 +94,9 @@ Version 0.1.1 fixes temporary `client-new-thread:` IDs using a read-only local m
 
 The earlier 0.1.1 live Windows passes each reconciled the already-filed temporary-ID chat with zero new groups, zero moves, and zero operation-check errors. Existing sections, pins, and project membership stayed unchanged. Its 20 previously excluded records are now covered by the separate 0.1.2 cloud regression. Older history remains outside coverage; operation success is reported separately from overall completeness.
 
-No telemetry, credentials, network client, or remote service is bundled. Native host tools perform changes. Private metadata snapshots may be saved temporarily on the user's computer for verification; never publish them. Native identity reads may also return messages; the workflow projects only identity fields and does not use or retain bodies. The host's own service and data handling still apply.
+No telemetry, credentials, network client, or remote service is bundled. Native desktop tools perform sidebar changes; the CLI catalog reads metadata through local `codex app-server`. Private metadata snapshots may be saved temporarily on the user's computer for verification; never publish them. Native identity reads may also return messages; the desktop workflow projects only identity fields and does not use or retain bodies. The CLI catalog does not read full conversations or display message previews; it displays session names, or `Untitled` when absent. The host's own service and data handling still apply.
 
-The optional Python 3.10+ standard-library helper only plans and verifies; it cannot move sidebar items. If Python is missing, the agent can follow the skill directly. All tests use synthetic data.
+The optional desktop helper `sidebar_plan.py` uses Python 3.10+ and the standard library to plan and verify; it cannot move sidebar items. If Python is missing, the agent can follow the desktop skill directly. The CLI catalog requires Python. All tests use synthetic data.
 
 ```sh
 python -m unittest discover -s tests -v
