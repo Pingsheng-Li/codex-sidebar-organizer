@@ -4,6 +4,8 @@
 
 在支持原生侧边栏工具的 Codex 桌面会话中，一句话按来源收纳项目和聊天。适合多台电脑、ChatGPT 云端项目和大量「最近」聊天混在一起的情况。
 
+本地开发分支还提供 [CLI 会话目录](#cli-会话目录开发分支)，用于在终端浏览、分组和继续本机会话；GitHub 已发布的 v0.1.3 不包含这项新功能。
+
 这是一个轻量技能插件：无需服务器、API Key 或额外 MCP 服务。**“自动归档”指分类收纳；不隐藏、删除或真正归档聊天。** 每次调用执行一轮，后续新增聊天可再次整理。也支持按需启用后台定时核对；目前不能自动同步网页端的删除。
 
 ## 整理效果
@@ -81,6 +83,26 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 
 首次整理会说明预计移动数量、未知来源和近期列表覆盖范围，随后执行已经请求的操作。默认将聊天设为最近更新时间排序；这是客户端共享的侧边栏偏好，置顶排序和分组显示模式保持原样。
 
+## CLI 会话目录（开发分支）
+
+需要 Python 3.10+ 和支持 `codex app-server` 的 Codex CLI。在当前仓库根目录执行：
+
+```sh
+python3 scripts/session_cli.py list --group-by project
+python3 scripts/session_cli.py list --group-by source --source cli
+python3 scripts/session_cli.py browse
+python3 scripts/session_cli.py group add "论文" SESSION_ID
+python3 scripts/session_cli.py list --group-by group
+python3 scripts/session_cli.py resume SESSION_ID --dry-run
+python3 scripts/session_cli.py resume SESSION_ID
+```
+
+`browse` 在交互终端中按编号选择会话并运行 `codex resume`。`SESSION_ID` 换成列表中的真实 ID；`resume` 也接受唯一的 ID 前缀。默认列出 CLI、VS Code、exec 和 app-server 入口的会话，不含子代理。项目按完整工作目录区分，来源表示会话入口，不代表创建它的物理电脑。
+
+自定义分组存入独立的本地 JSON，并按 `CODEX_HOME` 隔离；不会同步桌面分组或汇总其他电脑。目录默认通过官方 app-server 分页枚举当前 Codex 主目录及筛选范围内的可用会话，由官方接口扫描本地日志并修复索引。整理器只提取返回的元数据，不直接解析或修改客户端原始文件。若只需已有状态索引，可运行 `python3 scripts/session_cli.py --index-only list`；该模式可能遗漏未入索引的旧会话。
+
+全局参数放在子命令前。如果本机 Codex CLI 提示不支持配置中的 `ultra`，可临时运行 `python3 scripts/session_cli.py -c 'model_reasoning_effort="xhigh"' list`，无需修改配置文件。筛选、数据文件位置和已安装技能的运行方法见 [CLI 使用说明](plugins/sidebar-organizer/skills/organize-sidebar/references/cli.md)。上面的 v0.1.3 安装命令仍安装已发布的桌面插件。
+
 ## 0.1.3：刷新核对与后台检查
 
 可主动重新读取侧边栏，或者明确要求后通过 Codex 原生自动化每小时核对一次。重复设置会查找并复用已有任务；安装插件本身不会开启后台任务。检查只读取元数据，不建立分组、不移动或删除聊天。无变化保持安静，有新的待核对引用或来源异常时才提醒。
@@ -105,7 +127,7 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 
 ## 能力边界
 
-- **支持范围：** 提供原生分组工具的 Codex 桌面会话。安装本插件不会为独立 CLI、ChatGPT 网页或不支持的旧版本新增侧边栏接口。
+- **桌面整理范围：** 提供原生分组工具的 Codex 桌面会话。安装本插件不会为独立 CLI、ChatGPT 网页或不支持的旧版本新增侧边栏接口。开发分支的 CLI 会话目录使用独立分组。
 - **历史覆盖：** 已验证的列表工具最多返回 50 条非置顶聊天，没有历史分页。技能会检查是否还有获准的历史读取方式；无法读取的更早聊天明确列为未覆盖，总量未知。项目数量、聊天数量均动态读取，不硬编码作者的账户规模。
 - **来源含义：** 云端记录不代表由某台电脑或网页创建。本机标签指当前执行主机。无法可靠路由的后台记录会跳过，避免生成不可见的“空分类”。
 - **折叠和打开：** 元数据核对不能证明 UI 可见或可打开。没有支持的界面能力时，会提示手动点击标题收起，不声称已完成自动折叠。
@@ -114,11 +136,11 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 
 ## 隐私与实现
 
-插件没有网络客户端、遥测、凭据或远程执行服务，只使用宿主已有的桌面工具。助手可能在本机临时目录保存 ID、路径和分组信息以供核对；这些属于私人记录，不应提交到 GitHub。原生身份读取工具可能同时返回消息内容，整理流程只提取身份字段，不使用或保存正文。宿主 Codex/ChatGPT 的服务和数据处理方式仍由宿主决定。
+插件没有网络客户端、遥测、凭据或远程执行服务。桌面整理使用宿主已有的桌面工具；CLI 会话目录通过本机 `codex app-server` 读取元数据。助手可能在本机临时目录保存 ID、路径和分组信息以供核对；这些属于私人记录，不应提交到 GitHub。原生身份读取工具可能同时返回消息内容，整理流程只提取身份字段，不使用或保存正文。CLI 目录不读取完整对话、不展示消息预览，标题仅用会话名称，缺失时显示 `Untitled`。宿主 Codex/ChatGPT 的服务和数据处理方式仍由宿主决定。
 
 存在临时 ID 时，可选辅助程序还会只读加载当前 Codex 主目录中的 `.codex-global-state.json`，从中提取匹配的分组记录作为证据。不会导出该文件的其他设置，不会搜集其他账户或历史备份。
 
-可选的 Python 3.10+ 辅助程序只生成分类方案、核对前后元数据，不操作应用。没有 Python 时，助手可按技能规则直接使用原生工具。公开测试和示例全部使用虚构数据。
+可选的桌面辅助程序 `sidebar_plan.py`（Python 3.10+）只生成分类方案、核对前后元数据，不操作应用。没有 Python 时，助手可按桌面技能规则直接使用原生工具；CLI 会话目录需要 Python。公开测试和示例全部使用虚构数据。
 
 需要介绍本项目时，可使用这份 [项目简介](docs/INTRODUCTION.zh-CN.md)。
 

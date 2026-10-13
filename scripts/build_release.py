@@ -13,7 +13,9 @@ import zipfile
 ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugins/sidebar-organizer"
 SKILL = PLUGIN / "skills/organize-sidebar"
-SKILL_FILES = ["SKILL.md", "agents/openai.yaml", "references/native-tools.md", "references/refresh.md", "scripts/sidebar_plan.py"]
+SKILL_FILES = ["SKILL.md", "agents/openai.yaml", "references/native-tools.md", "references/refresh.md",
+               "references/cli.md", "scripts/sidebar_plan.py", "scripts/session_cli.py",
+               "scripts/session_rpc.py", "scripts/session_groups.py"]
 
 
 def checked_bytes(path):
@@ -80,6 +82,12 @@ def smoke(path, script_relative):
         with zipfile.ZipFile(path) as archive:
             archive.extractall(directory)
         script = directory / script_relative
+        session_cli = script.with_name("session_cli.py")
+        subprocess.run([sys.executable, str(session_cli), "--help"], check=True, capture_output=True)
+        group_file = directory / "cli-groups.json"
+        listing = subprocess.run([sys.executable, str(session_cli), "--data-file", str(group_file),
+                                  "group", "list"], check=True, capture_output=True, text=True)
+        assert "No saved CLI groups" in listing.stdout and not group_file.exists()
         before = fixture_module.fixture()
         before_path = directory / "synthetic-before.json"
         before_path.write_text(json.dumps(before), encoding="utf-8")
@@ -154,6 +162,9 @@ def main():
                "Preserves pins, project membership, and manual groups. Recent list coverage may be partial.\n"
                "Automatic collapse requires a supported UI surface. No cross-device sync guarantee.\n"
                "No server/API key; optional helper needs Python 3.10+.\n\n"
+               "Development CLI: python <skill-dir>/scripts/session_cli.py browse\n"
+               "Requires Python 3.10+ and Codex app-server. Groups are independent of desktop sections.\n"
+               "See references/cli.md for filters, saved groups, and session resume.\n\n"
                "Full Chinese/English instructions: https://github.com/VeraPyuyi/codex-sidebar-organizer\n").encode("utf-8")
     skill_entries = {"organize-sidebar/" + file: checked_bytes(SKILL / file) for file in SKILL_FILES}
     skill_entries.update({"organize-sidebar/LICENSE": license_bytes, "organize-sidebar/INSTALL.md": install})
