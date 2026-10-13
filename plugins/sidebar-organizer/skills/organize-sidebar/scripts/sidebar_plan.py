@@ -299,7 +299,17 @@ def blocked(source, host, data):
         source == "codex" and ("*" in data["hosts"] or host in data["hosts"]))
 
 
-def build_plan(snapshot, language="zh"):
+def remote_host_id(value):
+    return (stable(value) and value not in NON_HOSTS | {"local"}
+            and not any(c.isspace() or ord(c) < 32 or ord(c) == 127 for c in value))
+
+
+def build_plan(snapshot, language="zh", remote_layout="split", host_ids=None):
+    if remote_layout not in {"split", "host"}:
+        raise ValueError("Remote layout must be split or host")
+    if host_ids is not None and (remote_layout != "host" or not isinstance(host_ids, (list, tuple))
+                                 or not all(remote_host_id(host) for host in host_ids)):
+        raise ValueError("Host IDs require host layout and a list of stable physical remote IDs")
     labels = LABELS[language]
     data = index(snapshot)
     cloud_keys = {r["key"] for r in data["cloud_resolved"]}
@@ -308,27 +318,49 @@ def build_plan(snapshot, language="zh"):
         key not in data["pins"] and not data["chats"][key].get("projectId")
         and data["locations"].get(key, [None])[0] in DEFAULTS
         and not blocked("codex", "durable", data) for key in cloud_keys)
-    remote = {}
+    remote, display_names = {}, defaultdict(set)
     for key, row in data["projects"].items():
         host = row.get("hostId")
         if (key not in data["duplicates"] and row.get("projectKind") in {"local", "remote"}
                 and stable(host) and host != "local" and host not in NON_HOSTS):
-            remote[host] = row.get("hostDisplayName") or host
+            if remote_layout == "split":
+                remote[host] = row.get("hostDisplayName") or host
+            elif remote_host_id(host):
+                remote[host] = host
+                name = row.get("hostDisplayName")
+                if stable(name) and not any(ord(c) < 32 or ord(c) == 127 for c in name):
+                    display_names[host].add(name)
+    if remote_layout == "host":
+        if host_ids is not None and set(host_ids) - remote.keys():
+            raise ValueError("Requested host IDs need unambiguous native project evidence")
+        selected_hosts = sorted(remote if host_ids is None else set(host_ids))
+        # Conflicting native display names cannot make plans depend on project order.
+        remote = {host: next(iter(display_names[host])) if len(display_names[host]) == 1 else host
+                  for host in selected_hosts}
     remote_labels = {}
     for host in sorted(remote):
         prefix = "远程" if language == "zh" else "Remote"
-        name = f"{prefix} {remote[host]} [{host}]"
-        remote_labels[host] = [name + (" · 项目" if language == "zh" else " · Projects"),
-                               name + (" · 聊天" if language == "zh" else " · Chats")]
-    target_names = labels[:4] + ([cloud_label] if cloud_needed else []) + [name for pair in remote_labels.values() for name in pair] + labels[4:]
-    targets = [{"name": name, "sectionId": data["names"][name][0] if len(data["names"][name]) == 1 else None,
-                "state": "ambiguous" if len(data["names"][name]) > 1 else "reuse" if data["names"][name] else "create"}
-               for name in target_names]
+        if remote_layout == "host":
+            name = f"{prefix} · {remote[host]} [{host}]"
+            remote_labels[host] = [name, name]
+        else:
+            name = f"{prefix} {remote[host]} [{host}]"
+            remote_labels[host] = [name + (" · 项目" if language == "zh" else " · Projects"),
+                                   name + (" · 聊天" if language == "zh" else " · Chats")]
+    target_names = ([pair[0] for pair in remote_labels.values()] if remote_layout == "host" else
+                    labels[:4] + ([cloud_label] if cloud_needed else [])
+                    + [name for pair in remote_labels.values() for name in pair] + labels[4:])
     moves, protected, skipped = [], [], list(data["invalid"])
 
     def consider(key, row, entity):
         places = data["locations"].get(key, [])
         item = {"key": key, "entity": entity}
+        source, host = key.split(":", 1)[0], row.get("hostId")
+        kind = row.get("projectKind") if entity == "project" else row.get("kind")
+        if remote_layout == "host" and (source != "codex" or host not in remote_labels
+                                        or kind not in ({"local", "remote"} if entity == "project" else {"codex"})):
+            protected.append({**item, "reason": "outside_scope"})
+            return
         if key in data["pins"] or "pinned" in places:
             protected.append({**item, "reason": "pinned"})
             return
@@ -350,12 +382,9 @@ def build_plan(snapshot, language="zh"):
         if entity == "chat" and row.get("kind") == "codex" and row.get("hostId") in data["alias_hosts"]:
             skipped.append({**item, "reason": "unresolved_client_alias"})
             return
-        source = key.split(":", 1)[0]
-        host = row.get("hostId")
         if blocked(source, host, data):
             skipped.append({**item, "reason": "source_or_host_unavailable"})
             return
-        kind = row.get("projectKind") if entity == "project" else row.get("kind")
         offset = 0 if entity == "project" else 2
         if source == "chatgpt" and kind == "chatgpt":
             target = labels[offset + 1]
@@ -391,14 +420,23 @@ def build_plan(snapshot, language="zh"):
         if key and key not in visited:
             visited.add(key)
             consider(key, row, "chat")
+    if remote_layout == "host":
+        needed = {move["targetName"] for move in moves}
+        needed.update(item["targetName"] for item in skipped if item["reason"] == "duplicate_target_name")
+        target_names = [name for name in target_names if name in needed or len(data["names"][name]) == 1]
+    targets = [{"name": name, "sectionId": data["names"][name][0] if len(data["names"][name]) == 1 else None,
+                "state": "ambiguous" if len(data["names"][name]) > 1 else "reuse" if data["names"][name] else "create"}
+               for name in target_names]
     known = set(data["chats"])
     unlisted = [k for k in data["locations"] if (k.startswith("codex:thread:") or k.startswith("chatgpt:conversation:")) and k not in known]
     return {
-        "schemaVersion": 3, "language": language, "snapshotSha256": fingerprint(snapshot),
+        "schemaVersion": 4 if remote_layout == "host" else 3,
+        **({"remoteLayout": "host", "hostIds": selected_hosts} if remote_layout == "host" else {}),
+        "language": language, "snapshotSha256": fingerprint(snapshot),
         "identityReconciliation": {"resolvedMemberships": data["resolved"], "unresolvedAliasHosts": sorted(data["alias_hosts"])},
         "cloudReconciliation": data["cloud_resolved"],
         "targets": targets, "moves": moves, "protected": protected, "skipped": skipped,
-        "sorting": {"chats": "updated_at"},
+        "sorting": {} if remote_layout == "host" else {"chats": "updated_at"},
         "coverage": {"complete": False, "totalHistory": None, "listedProjects": len(data["projects"]),
                      "listedChats": len(data["chats"]), "visible_unlisted_chat_keys": len(unlisted),
                      "unavailableHosts": sorted(data["hosts"]), "unavailableSources": sorted(data["sources"]),
@@ -407,7 +445,7 @@ def build_plan(snapshot, language="zh"):
 
 
 def verify(before, after, plan):
-    if plan != build_plan(before, plan.get("language", "zh")):
+    if plan != build_plan(before, plan.get("language", "zh"), plan.get("remoteLayout", "split"), plan.get("hostIds")):
         raise ValueError("Plan does not match the before snapshot; regenerate it")
     old, new = index(before), index(after)
     errors, unknown, confirmed = [], [], []
@@ -417,7 +455,10 @@ def verify(before, after, plan):
         errors.append("pinned_section_position_changed")
     if plan["skipped"]:
         unknown.append("plan_contains_skipped_items")
-    if old["alias_hosts"] or new["alias_hosts"]:
+    aliases = old["alias_hosts"] | new["alias_hosts"]
+    if plan.get("remoteLayout") == "host":
+        aliases &= set(plan["hostIds"])
+    if aliases:
         unknown.append("unresolved_client_alias")
     if {r["key"] for r in old["cloud_resolved"]} - {r["key"] for r in new["cloud_resolved"]}:
         unknown.append("cloud_evidence_not_refreshed")
@@ -438,7 +479,11 @@ def verify(before, after, plan):
     for field in ("invalid", "duplicates"):
         if old[field] or new[field]:
             unknown.append(f"unresolved_{field}")
-    if new["hosts"] or new["sources"]:
+    unavailable = bool(new["hosts"] or new["sources"])
+    if plan.get("remoteLayout") == "host":
+        unavailable = ("*" in new["hosts"] or "*" in new["sources"]
+                       or any(blocked("codex", host, new) for host in plan["hostIds"]))
+    if unavailable:
         unknown.append("after_snapshot_has_unavailable_sources_or_hosts")
     if any(len(places) > 1 for places in new["locations"].values()):
         unknown.append("duplicate_after_section_membership")
@@ -455,13 +500,14 @@ def verify(before, after, plan):
             confirmed.append(move["key"])
         else:
             errors.append(f"destination_not_verified:{move['key']}")
-    # Changes outside chats recency sorting are never requested by this helper.
+    # Host-only organization requests no shared preference changes.
     prefs_before, prefs_after = json.loads(json.dumps(old["preferences"])), json.loads(json.dumps(new["preferences"]))
-    for prefs in (prefs_before, prefs_after):
-        prefs.setdefault("sorting", {}).pop("chats", None)
+    if plan["sorting"]:
+        for prefs in (prefs_before, prefs_after):
+            prefs.setdefault("sorting", {}).pop("chats", None)
     if prefs_before != prefs_after:
         errors.append("unrequested_sidebar_preference_change")
-    if new["preferences"].get("sorting", {}).get("chats") != "updated_at":
+    if plan["sorting"] and new["preferences"].get("sorting", {}).get("chats") != "updated_at":
         unknown.append("recency_sorting_not_verified")
     target_names = {t["name"] for t in plan["targets"]}
     def unrelated(data):
@@ -473,7 +519,7 @@ def verify(before, after, plan):
     if actual != desired:
         unknown.append("managed_section_order_or_creation_not_verified")
     blocking_unknown = [item for item in unknown if item != "plan_contains_skipped_items"]
-    return {"schemaVersion": 3, "status": "failed" if errors else "incomplete" if unknown else "metadata_verified",
+    return {"schemaVersion": plan["schemaVersion"], "status": "failed" if errors else "incomplete" if unknown else "metadata_verified",
             "operationChecksPassed": not errors and not blocking_unknown,
             "excludedItemCount": len(plan["skipped"]),
             "identityReconciliation": {"before": old["resolved"], "after": new["resolved"]},
@@ -554,6 +600,9 @@ def main():
     planner = sub.add_parser("plan", help="Generate a read-only plan")
     planner.add_argument("--input", required=True, type=Path)
     planner.add_argument("--language", choices=LABELS, default="zh")
+    planner.add_argument("--remote-layout", choices=("split", "host"), default="split",
+                         help="host: organize only verified remote hosts into separate top-level sections")
+    planner.add_argument("--host-id", action="append", help="Exact native remote host ID; repeat to scope host layout")
     capture = sub.add_parser("capture-identity", help="Add read-only local membership evidence for temporary IDs")
     capture.add_argument("--input", required=True, type=Path)
     capture.add_argument("--state", type=Path, default=Path(os.environ.get("CODEX_HOME", Path.home() / ".codex")) / ".codex-global-state.json")
@@ -584,7 +633,7 @@ def main():
         elif args.command == "capture-cloud":
             result = capture_cloud(read(args.input), read(args.reads))
         elif args.command == "plan":
-            result = build_plan(read(args.input), args.language)
+            result = build_plan(read(args.input), args.language, args.remote_layout, args.host_id)
         else:
             result = verify(read(args.before), read(args.after), read(args.plan))
         # Exclusive creation avoids accidental overwrites of a previous private receipt.
