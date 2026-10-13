@@ -1,5 +1,35 @@
 # Validation scope — 0.1.3
 
+## Development branch: top-level Remote desktop sections
+
+The new `plan --remote-layout host` mode targets one native top-level section per
+verified remote host, with optional repeated `--host-id` selection. It preserves
+project nodes and existing chat project membership, pins, custom sections,
+unselected hosts, and all sidebar preferences. The schema-4 plan includes its
+layout/host scope and requests no sorting changes. Default split-layout plans
+remain schema 3.
+
+On 2026-10-13, all 151 unit tests passed, including 29 new Remote-layout tests.
+Both release ZIPs passed fresh-extraction smoke checks, including the host-layout
+plan → verify → repeat cycle. These checks use synthetic native metadata for host
+grouping, identical display names, host selection, protected items, empty/no-op
+plans, repeated planning, and scoped verification. They do not register a real
+desktop SSH host, import CLI sessions,
+or mutate a real sidebar. The existing SSH CLI connection/list/resume checks below
+do not validate desktop sections. Current-session native sidebar tools were not
+available, so no live Remote section creation, visible placement, collapse, or
+opening has been verified. Published v0.1.3 ZIPs do not include this development
+feature.
+
+Manual acceptance requires a supported desktop session with a host and remote
+project registered through Settings > Connections. Capture fresh native metadata,
+apply an authorized plan using native section/project/chat tools, and read back
+each destination and invariant. Then open a representative remote project and
+chat through supported navigation, confirm the Remote heading is alongside
+Projects/Recents, and repeat planning to confirm no extra group or move. Keep real
+host IDs, paths, and snapshots outside this repository. See [the Remote
+procedure](../plugins/sidebar-organizer/skills/organize-sidebar/references/remote-sidebar.md).
+
 ## Development branch: CLI session catalog
 
 The initial local CLI extension added 38 synthetic tests (99 total) for the native JSONL handshake,

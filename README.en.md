@@ -4,7 +4,7 @@
 
 A skills-only plugin that files desktop projects and chats into native sections by verified source. No server, API key, or extra MCP service. “Archive” means sidebar filing here: it does not hide, delete, or archive conversations.
 
-The development branch also includes a [CLI session catalog](#cli-session-catalog-development-branch) for browsing, grouping, and resuming local or SSH remote sessions. The published GitHub v0.1.3 release does not include this new feature.
+The development branch also includes [top-level Remote desktop sections](#top-level-remote-desktop-sections-development-branch) and a [CLI session catalog](#cli-session-catalog-development-branch) for browsing, grouping, and resuming local or SSH remote sessions. The published GitHub v0.1.3 release does not include these new features.
 
 ## Install
 
@@ -21,7 +21,7 @@ Open a fresh **Codex desktop session**, select `organize-sidebar` (or `sidebar-o
 Use $organize-sidebar to organize my projects and chats by source. Preserve pins and project membership.
 ```
 
-For a preview, add “Preview only; do not move anything.” Run again to file new items. Existing manual groups remain intact. The default uses recent-update chat sorting, a shared sidebar preference; pinned sorting and the current grouping mode are preserved.
+For a preview, add “Preview only; do not move anything.” Run again to file new items. Existing manual groups remain intact. The default source layout uses recent-update chat sorting, a shared sidebar preference; pinned sorting and the current grouping mode are preserved. The Remote layout below preserves all sorting preferences.
 
 If `plugin add` is unavailable, add the marketplace and install Sidebar Organizer from the desktop Plugins Directory. Alternatively, download `organize-sidebar-skill-0.1.3.zip`, extract it, and copy the complete `organize-sidebar` folder into `~/.codex/skills/` (Windows: `%USERPROFILE%\.codex\skills\`; use your configured Codex home if different). Back up an existing folder before replacing it. Start a fresh desktop session. Install either the plugin or standalone skill, not both.
 
@@ -38,6 +38,32 @@ codex plugin add sidebar-organizer@sidebar-organizer-marketplace
 ```
 
 Open a fresh desktop session to load the updated skill. Standalone skill users should back up and replace the skill folder instead.
+
+## Top-level Remote desktop sections (development branch)
+
+This layout creates one native sidebar section per remote host, alongside **Projects and Recents**. It holds the host's existing project nodes and chats without a project. Chats already assigned to a project keep that membership:
+
+```text
+▸ Projects
+▸ Recents
+▾ Remote · Devbox [host-a]
+    ▸ Project A
+        Project A chat
+    Chat without a project
+▸ Remote · Workstation [host-b]
+```
+
+This is a layout illustration, not a verified screenshot. Section names follow the request language, with a stable host ID suffix to distinguish machines sharing a display name. The layout does not create folders under Projects, assign chats to new projects, or create nested sections.
+
+First follow the [official remote connection setup](https://learn.chatgpt.com/docs/remote-connections#connect-to-an-ssh-host): add or enable the SSH host in the desktop app's **Settings → Connections**, then choose a remote project folder. In a desktop session that exposes native sidebar tools and has loaded this development branch's skill, ask:
+
+```text
+Use $organize-sidebar to put each connected remote host in a top-level Remote section alongside Projects and Recents. Preserve project membership.
+```
+
+Name a registered host to limit the operation, or add “Preview only; do not move anything.” This mode only handles remote hosts verified by native desktop project metadata. It preserves pins, manual groups, existing split remote project/chat sections, and all global sorting preferences. It creates no empty sections when nothing can move, and adds no local or cloud sections.
+
+The SSH CLI catalog does not import sessions into the desktop. Moves require identities exposed by native desktop lists; an SSH alias, working directory, or CLI session ID cannot substitute for that evidence. Missing tools are reported as unavailable. See [Remote section usage](plugins/sidebar-organizer/skills/organize-sidebar/references/remote-sidebar.md) for planning and verification. Validation currently covers synthetic metadata; visible desktop placement and opening still require manual acceptance.
 
 ## CLI session catalog (development branch)
 

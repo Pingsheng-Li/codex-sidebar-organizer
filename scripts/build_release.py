@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugins/sidebar-organizer"
 SKILL = PLUGIN / "skills/organize-sidebar"
 SKILL_FILES = ["SKILL.md", "agents/openai.yaml", "references/native-tools.md", "references/refresh.md",
-               "references/cli.md", "scripts/sidebar_plan.py", "scripts/session_cli.py",
+               "references/cli.md", "references/remote-sidebar.md", "scripts/sidebar_plan.py", "scripts/session_cli.py",
                "scripts/session_rpc.py", "scripts/session_groups.py", "scripts/session_remote.py"]
 
 
@@ -109,6 +109,40 @@ def smoke(path, script_relative):
         result_path = directory / "synthetic-verification.json"
         subprocess.run([sys.executable, str(script), "verify", "--before", str(before_path), "--after", str(after_path), "--plan", str(plan_path), "--output", str(result_path)], check=True, capture_output=True)
         assert json.loads(result_path.read_text(encoding="utf-8"))["status"] == "metadata_verified"
+        remote_before = fixture_module.fixture()
+        for number in (1, 2):
+            pid = f"remote-project-{number}"
+            remote_before["projects"]["projects"].append({"projectId": pid, "projectKind": "remote",
+                "hostId": "host-a", "hostDisplayName": "Workstation", "path": f"/remote/project-{number}"})
+            remote_before["sidebar"]["sections"][2]["itemKeys"].append(f"codex:project:{pid}")
+        for ident, project in (("remote-loose", None), ("remote-member", "remote-project-1")):
+            remote_before["sidebar"]["threads"].append({"id": ident, "kind": "codex", "hostId": "host-a", "projectId": project})
+            remote_before["sidebar"]["sections"][3]["itemKeys"].append(f"codex:thread:host-a:{ident}")
+        remote_before_path, remote_plan_path = directory / "remote-before.json", directory / "remote-plan.json"
+        remote_before_path.write_text(json.dumps(remote_before), encoding="utf-8")
+        subprocess.run([sys.executable, str(script), "plan", "--input", str(remote_before_path),
+                        "--remote-layout", "host", "--host-id", "host-a", "--language", "en",
+                        "--output", str(remote_plan_path)], check=True, capture_output=True)
+        remote_plan = json.loads(remote_plan_path.read_text(encoding="utf-8"))
+        assert remote_plan["schemaVersion"] == 4 and remote_plan["sorting"] == {}
+        assert [target["name"] for target in remote_plan["targets"]] == ["Remote · Workstation [host-a]"]
+        assert {move["key"] for move in remote_plan["moves"]} == {
+            "codex:project:remote-project-1", "codex:project:remote-project-2", "codex:thread:host-a:remote-loose"}
+        remote_after = fixture_module.simulate(remote_before, remote_plan)
+        # The generic fixture simulates old default sorting; host mode preserves preferences.
+        remote_after["sidebar"]["sidebarPreferences"] = remote_before["sidebar"]["sidebarPreferences"]
+        remote_after_path, remote_result_path = directory / "remote-after.json", directory / "remote-verification.json"
+        remote_after_path.write_text(json.dumps(remote_after), encoding="utf-8")
+        subprocess.run([sys.executable, str(script), "verify", "--before", str(remote_before_path),
+                        "--after", str(remote_after_path), "--plan", str(remote_plan_path),
+                        "--output", str(remote_result_path)], check=True, capture_output=True)
+        assert json.loads(remote_result_path.read_text(encoding="utf-8"))["status"] == "metadata_verified"
+        repeat_path = directory / "remote-repeat.json"
+        subprocess.run([sys.executable, str(script), "plan", "--input", str(remote_after_path),
+                        "--remote-layout", "host", "--host-id", "host-a", "--language", "en",
+                        "--output", str(repeat_path)], check=True, capture_output=True)
+        repeated = json.loads(repeat_path.read_text(encoding="utf-8"))
+        assert repeated["moves"] == [] and [target["state"] for target in repeated["targets"]] == ["reuse"]
         alias_native, alias_state = fixture_module.alias_fixture()
         alias_input, state_path = directory / "alias-native.json", directory / "local-state.json"
         alias_input.write_text(json.dumps(alias_native), encoding="utf-8")
