@@ -158,6 +158,104 @@ class SessionCliTests(unittest.TestCase):
         for value in ["0", "-1", "nan", "inf"]:
             self.assertEqual(self.run_cli("--timeout", value, "list")[0], 1)
 
+    def remote_fixture(self, remote_class, host="devbox"):
+        remote = remote_class.return_value
+        remote.resolve.return_value = remote
+        remote.host = host
+        remote.home = "/home/remote/.codex"
+        remote.scope = "ssh:" + host + ":/home/remote/.codex"
+        remote.app_server_argv.return_value = ["ssh", "-T", host, "remote-app-server"]
+        remote.resume_argv.return_value = ["ssh", "-t", host, "remote-resume"]
+        return remote
+
+    def test_remote_listing_preserves_remote_paths_and_reports_host(self):
+        with patch.object(cli, "RemoteHost", create=True) as remote_class:
+            remote = self.remote_fixture(remote_class)
+            code, out, err = self.run_cli("--host", "devbox", "--codex", "/opt/remote/bin/codex",
+                                          "--remote-home", "/srv/codex", "list", "--cwd", "/remote/work", "--json")
+        self.assertEqual((code, err), (0, ""))
+        remote_class.assert_called_once_with("devbox", codex="/opt/remote/bin/codex", config=[],
+                                             home="/srv/codex", timeout=15.0)
+        remote.resolve.assert_called_once_with()
+        self.server_class.assert_called_once_with(launch_argv=remote.app_server_argv.return_value, timeout=15.0)
+        self.assertEqual(self.server.list_threads.call_args.kwargs["cwd"], "/remote/work")
+        report = json.loads(out)
+        self.assertEqual(report["host"], "devbox")
+        self.assertEqual(report["scope"], remote.scope)
+        self.assertEqual(report["coverage"], "remote_home_saved_sessions")
+
+    def test_remote_cwd_must_be_absolute_without_local_expansion(self):
+        with patch.object(cli, "RemoteHost", create=True) as remote_class:
+            self.remote_fixture(remote_class)
+            for cwd in ["relative/path", "~/project", "C:\\project", "/work\nother"]:
+                code, _, err = self.run_cli("--host", "devbox", "list", "--cwd", cwd)
+                self.assertEqual(code, 1, cwd)
+                self.assertIn("absolute POSIX", err)
+        self.server_class.assert_not_called()
+
+    def test_remote_home_requires_host(self):
+        code, _, err = self.run_cli("--remote-home", "/remote/codex", "list")
+        self.assertEqual(code, 1)
+        self.assertIn("requires --host", err)
+        self.server_class.assert_not_called()
+
+    def test_remote_groups_are_isolated_from_local_and_other_hosts(self):
+        self.assertEqual(self.run_cli("group", "add", "Local", "aaaa-1")[0], 0)
+        with patch.object(cli, "RemoteHost", create=True) as remote_class:
+            remote = self.remote_fixture(remote_class)
+            self.assertEqual(self.run_cli("--host", "devbox", "group", "add", "Remote", "aaaa-1")[0], 0)
+            code, out, _ = self.run_cli("--host", "devbox", "list", "--json")
+            self.assertEqual(code, 0)
+            self.assertEqual(json.loads(out)["sessions"][0]["group"], "Remote")
+            remote.scope = "ssh:other:/home/remote/.codex"
+            _, out, _ = self.run_cli("--host", "other", "group", "list")
+            self.assertIn("No saved CLI groups", out)
+        _, out, _ = self.run_cli("list", "--json")
+        self.assertEqual(json.loads(out)["sessions"][0]["group"], "Local")
+
+    def test_remote_group_list_resolves_scope_without_app_server(self):
+        with patch.object(cli, "RemoteHost", create=True) as remote_class:
+            remote = self.remote_fixture(remote_class)
+            self.assertEqual(self.run_cli("--host", "devbox", "group", "list")[0], 0)
+        remote.resolve.assert_called_once_with()
+        self.server_class.assert_not_called()
+
+    def test_remote_resume_dry_run_checks_directory_on_remote_only(self):
+        self.threads[0]["cwd"] = "/only-on-remote/project"
+        with patch.object(cli, "RemoteHost", create=True) as remote_class, patch.object(cli.subprocess, "call") as call:
+            remote = self.remote_fixture(remote_class)
+            code, out, err = self.run_cli("--host", "devbox", "resume", "aaaa-1", "--dry-run")
+        self.assertEqual((code, err), (0, ""))
+        remote.validate_cwd.assert_called_once_with("/only-on-remote/project")
+        remote.resume_argv.assert_called_once_with("/only-on-remote/project", "aaaa-1111")
+        self.assertEqual(json.loads(out)["host"], "devbox")
+        self.assertEqual(json.loads(out)["argv"], remote.resume_argv.return_value)
+        call.assert_not_called()
+
+    def test_remote_resume_failure_does_not_start_conversation(self):
+        with patch.object(cli, "RemoteHost", create=True) as remote_class, patch.object(cli.subprocess, "call") as call:
+            remote = self.remote_fixture(remote_class)
+            remote.validate_cwd.side_effect = ValueError("Remote working directory is unavailable")
+            code, _, err = self.run_cli("--host", "devbox", "resume", "aaaa-1", "--dry-run")
+        self.assertEqual(code, 1)
+        self.assertIn("unavailable", err)
+        call.assert_not_called()
+
+    def test_remote_interactive_resume_has_no_local_cwd_or_codex_home(self):
+        with patch.object(cli, "RemoteHost", create=True) as remote_class:
+            args = cli.parser().parse_args(["--host", "devbox", "resume", "aaaa-1"])
+            args.remote = self.remote_fixture(remote_class)
+            out = io.StringIO()
+            out.isatty = lambda: True
+            with patch.object(cli.sys.stdin, "isatty", return_value=True), contextlib.redirect_stdout(out), \
+                    patch.dict(os.environ, {"CODEX_HOME": "/local/private"}), \
+                    patch.object(cli.subprocess, "call", return_value=7) as call:
+                self.assertEqual(cli.resume_session(args, self.threads[0]), 7)
+        self.assertEqual(call.call_args.args[0], args.remote.resume_argv.return_value)
+        self.assertIsNone(call.call_args.kwargs.get("cwd"))
+        self.assertNotIn("CODEX_HOME", call.call_args.kwargs["env"])
+        self.assertNotIn("shell", call.call_args.kwargs)
+
 
 if __name__ == "__main__":
     unittest.main()

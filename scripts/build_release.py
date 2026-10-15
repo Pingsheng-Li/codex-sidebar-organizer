@@ -14,8 +14,8 @@ ROOT = Path(__file__).resolve().parents[1]
 PLUGIN = ROOT / "plugins/sidebar-organizer"
 SKILL = PLUGIN / "skills/organize-sidebar"
 SKILL_FILES = ["SKILL.md", "agents/openai.yaml", "references/native-tools.md", "references/refresh.md",
-               "references/cli.md", "scripts/sidebar_plan.py", "scripts/session_cli.py",
-               "scripts/session_rpc.py", "scripts/session_groups.py"]
+               "references/cli.md", "references/remote-sidebar.md", "scripts/sidebar_plan.py", "scripts/session_cli.py",
+               "scripts/session_rpc.py", "scripts/session_groups.py", "scripts/session_remote.py"]
 
 
 def checked_bytes(path):
@@ -83,7 +83,10 @@ def smoke(path, script_relative):
             archive.extractall(directory)
         script = directory / script_relative
         session_cli = script.with_name("session_cli.py")
-        subprocess.run([sys.executable, str(session_cli), "--help"], check=True, capture_output=True)
+        help_result = subprocess.run([sys.executable, str(session_cli), "--help"],
+                                     check=True, capture_output=True, text=True)
+        assert all(option in help_result.stdout for option in
+                   ("--host", "--remote-home", "--ssh-control-path"))
         group_file = directory / "cli-groups.json"
         listing = subprocess.run([sys.executable, str(session_cli), "--data-file", str(group_file),
                                   "group", "list"], check=True, capture_output=True, text=True)
@@ -106,6 +109,40 @@ def smoke(path, script_relative):
         result_path = directory / "synthetic-verification.json"
         subprocess.run([sys.executable, str(script), "verify", "--before", str(before_path), "--after", str(after_path), "--plan", str(plan_path), "--output", str(result_path)], check=True, capture_output=True)
         assert json.loads(result_path.read_text(encoding="utf-8"))["status"] == "metadata_verified"
+        remote_before = fixture_module.fixture()
+        for number in (1, 2):
+            pid = f"remote-project-{number}"
+            remote_before["projects"]["projects"].append({"projectId": pid, "projectKind": "remote",
+                "hostId": "host-a", "hostDisplayName": "Workstation", "path": f"/remote/project-{number}"})
+            remote_before["sidebar"]["sections"][2]["itemKeys"].append(f"codex:project:{pid}")
+        for ident, project in (("remote-loose", None), ("remote-member", "remote-project-1")):
+            remote_before["sidebar"]["threads"].append({"id": ident, "kind": "codex", "hostId": "host-a", "projectId": project})
+            remote_before["sidebar"]["sections"][3]["itemKeys"].append(f"codex:thread:host-a:{ident}")
+        remote_before_path, remote_plan_path = directory / "remote-before.json", directory / "remote-plan.json"
+        remote_before_path.write_text(json.dumps(remote_before), encoding="utf-8")
+        subprocess.run([sys.executable, str(script), "plan", "--input", str(remote_before_path),
+                        "--remote-layout", "host", "--host-id", "host-a", "--language", "en",
+                        "--output", str(remote_plan_path)], check=True, capture_output=True)
+        remote_plan = json.loads(remote_plan_path.read_text(encoding="utf-8"))
+        assert remote_plan["schemaVersion"] == 4 and remote_plan["sorting"] == {}
+        assert [target["name"] for target in remote_plan["targets"]] == ["Remote · Workstation [host-a]"]
+        assert {move["key"] for move in remote_plan["moves"]} == {
+            "codex:project:remote-project-1", "codex:project:remote-project-2", "codex:thread:host-a:remote-loose"}
+        remote_after = fixture_module.simulate(remote_before, remote_plan)
+        # The generic fixture simulates old default sorting; host mode preserves preferences.
+        remote_after["sidebar"]["sidebarPreferences"] = remote_before["sidebar"]["sidebarPreferences"]
+        remote_after_path, remote_result_path = directory / "remote-after.json", directory / "remote-verification.json"
+        remote_after_path.write_text(json.dumps(remote_after), encoding="utf-8")
+        subprocess.run([sys.executable, str(script), "verify", "--before", str(remote_before_path),
+                        "--after", str(remote_after_path), "--plan", str(remote_plan_path),
+                        "--output", str(remote_result_path)], check=True, capture_output=True)
+        assert json.loads(remote_result_path.read_text(encoding="utf-8"))["status"] == "metadata_verified"
+        repeat_path = directory / "remote-repeat.json"
+        subprocess.run([sys.executable, str(script), "plan", "--input", str(remote_after_path),
+                        "--remote-layout", "host", "--host-id", "host-a", "--language", "en",
+                        "--output", str(repeat_path)], check=True, capture_output=True)
+        repeated = json.loads(repeat_path.read_text(encoding="utf-8"))
+        assert repeated["moves"] == [] and [target["state"] for target in repeated["targets"]] == ["reuse"]
         alias_native, alias_state = fixture_module.alias_fixture()
         alias_input, state_path = directory / "alias-native.json", directory / "local-state.json"
         alias_input.write_text(json.dumps(alias_native), encoding="utf-8")
@@ -164,6 +201,8 @@ def main():
                "No server/API key; optional helper needs Python 3.10+.\n\n"
                "Development CLI: python <skill-dir>/scripts/session_cli.py browse\n"
                "Requires Python 3.10+ and Codex app-server. Groups are independent of desktop sections.\n"
+               "Remote CLI: add --host <ssh-alias> before browse; uses system OpenSSH and remote Codex.\n"
+               "Establish SSH key/agent authentication and host-key trust first. No remote Python required.\n"
                "See references/cli.md for filters, saved groups, and session resume.\n\n"
                "Full Chinese/English instructions: https://github.com/VeraPyuyi/codex-sidebar-organizer\n").encode("utf-8")
     skill_entries = {"organize-sidebar/" + file: checked_bytes(SKILL / file) for file in SKILL_FILES}

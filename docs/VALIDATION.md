@@ -1,8 +1,38 @@
 # Validation scope — 0.1.3
 
+## Development branch: top-level Remote desktop sections
+
+The new `plan --remote-layout host` mode targets one native top-level section per
+verified remote host, with optional repeated `--host-id` selection. It preserves
+project nodes and existing chat project membership, pins, custom sections,
+unselected hosts, and all sidebar preferences. The schema-4 plan includes its
+layout/host scope and requests no sorting changes. Default split-layout plans
+remain schema 3.
+
+On 2026-10-13, all 151 unit tests passed, including 29 new Remote-layout tests.
+Both release ZIPs passed fresh-extraction smoke checks, including the host-layout
+plan → verify → repeat cycle. These checks use synthetic native metadata for host
+grouping, identical display names, host selection, protected items, empty/no-op
+plans, repeated planning, and scoped verification. They do not register a real
+desktop SSH host, import CLI sessions,
+or mutate a real sidebar. The existing SSH CLI connection/list/resume checks below
+do not validate desktop sections. Current-session native sidebar tools were not
+available, so no live Remote section creation, visible placement, collapse, or
+opening has been verified. Published v0.1.3 ZIPs do not include this development
+feature.
+
+Manual acceptance requires a supported desktop session with a host and remote
+project registered through Settings > Connections. Capture fresh native metadata,
+apply an authorized plan using native section/project/chat tools, and read back
+each destination and invariant. Then open a representative remote project and
+chat through supported navigation, confirm the Remote heading is alongside
+Projects/Recents, and repeat planning to confirm no extra group or move. Keep real
+host IDs, paths, and snapshots outside this repository. See [the Remote
+procedure](../plugins/sidebar-organizer/skills/organize-sidebar/references/remote-sidebar.md).
+
 ## Development branch: CLI session catalog
 
-The CLI extension adds 38 synthetic tests (99 total) for the native JSONL handshake,
+The initial local CLI extension added 38 synthetic tests (99 total) for the native JSONL handshake,
 paginated metadata listing, all-provider queries, optional index-only mode,
 timeouts and subprocess cleanup, independent group storage, command selection,
 TTY handling, safe argument passing, and resume dry runs. The existing 61 desktop
@@ -19,8 +49,37 @@ its own state database even when the organizer only requests metadata.
 
 CLI groups were tested with synthetic identities in temporary files. No real
 desktop groups or session content were changed by the organizer. Returned records
-cover the current Codex home and selected filters, not other computers or all
-account history. Saved CLI groups remain independent of desktop sections.
+cover the selected host's Codex home and filters, not all computers or all account
+history. Saved CLI groups remain independent of desktop sections.
+
+### SSH extension
+
+The SSH extension adds 23 tests (122 total), covering mocked SSH processes, synthetic
+metadata, actual local POSIX shell quoting, sibling runtime lookup for npm/nvm,
+scope isolation, ControlMaster options, and remote directory checks. POSIX shell
+execution tests are skipped on Windows; platform-independent SSH tests still run.
+The scope is one configured SSH host per command, with group identities separated by
+effective hostname, user, port, and actual remote Codex home. No real remote account,
+session logs, or saved group data is used by automated checks. Release smoke checks
+load the bundled remote module and confirm that extracted CLI help exposes `--host`
+and `--remote-home` / `--ssh-control-path`, without connecting to a host. The release version remains 0.1.3;
+these are development-branch checks, not a claim that the published ZIPs contain SSH support.
+
+On 2026-10-12, a macOS client reused a user-authenticated, Duo-protected OpenSSH
+ControlMaster connection to a Linux host running Codex CLI 0.153.4. Remote home resolution, a native metadata
+list, and a resume dry run including the remote directory check passed. The remote
+npm/nvm Codex launcher required an absolute executable path and its sibling Node
+runtime on PATH; the helper now sets that PATH only for the remote command. No real
+group assignments were changed and no interactive conversation was launched. Real
+interactive SSH resume therefore remains a manual acceptance step.
+
+Manual remote acceptance requires an existing trusted SSH connection with key/agent
+authentication and an authenticated remote Codex CLI on Linux/macOS. Verify a filtered
+list, synthetic group assignment/readback, `resume --dry-run`, and a user-launched
+interactive resume in the original remote working directory. Also check distinct
+hosts/homes, an unavailable remote working directory, and reuse of a user-authenticated
+ControlMaster connection for MFA. Do not publish real metadata
+or copy session logs into the repository for these checks.
 
 The workflow was designed against native desktop tool schemas observed on 2026-10-11. It does not guarantee that another account, platform, client version, or session exposes those tools. Discovery and capability checks are mandatory at runtime.
 

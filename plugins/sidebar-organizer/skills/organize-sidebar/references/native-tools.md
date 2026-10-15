@@ -6,12 +6,12 @@ Verified against the desktop tool surface on 2026-10-11. Discover current schema
 |---|---|
 | List | `list_threads({limit: 50})`, `list_projects({})` |
 | Verify Codex cloud identity | `read_thread({threadId, hostId: "durable", turnLimit: 1, includeOutputs: false})`; project only response thread metadata |
-| Create | `create_sidebar_section({name})` |
+| Create top-level section | `create_sidebar_section({name})`; no parent-project argument |
 | Move project | `move_project_to_sidebar_section({projectId, sectionId})` |
 | Move chat | `move_thread_to_sidebar_section({threadId, source, hostId?, sectionId})` |
 | Section order | `reorder_sidebar_sections({sectionIds})`; include every custom section |
 | Chat order | `reorder_section({sectionId, threadIds})`; include every chat in that section |
-| Recency sorting | `update_sidebar_preferences({sorting: {chats: "updated_at"}})` |
+| Recency sorting | `update_sidebar_preferences({sorting: {chats: "updated_at"}})` only when the plan requests it; Remote host mode makes no preference write |
 | Read-only refresh check | Re-read `list_threads`; no native forced-refresh/deletion-proof/cleanup tool exposed in the tested host |
 | Requested background checks | `automation_update`, native thread heartbeat; see [refresh procedure](refresh.md) |
 
@@ -56,7 +56,15 @@ The helper constructs keys from exact native fields and demands exact section me
 
 Remote IDs must occur on a `local` or `remote` project with a nonlocal host. `durable`, `cloud`, and `unknown` are not physical host evidence. Version 0.1.2 separately supports `durable` as Codex cloud execution with the per-record evidence below; other synthetic hosts remain unclassified. Sources/hosts listed as unavailable block dependent moves; ambiguous availability representations fail closed.
 
-The planner emits the five standard targets plus observed verified remote targets. It preserves custom items even when placed in the wrong source group: moving already filed items requires a separate user request. Names are matched exactly. Duplicate target names block affected moves and section creation for that name. It never deletes sections. The verifier checks observed pin order, metadata, protected placements, and each planned move; new/missing/duplicate identities produce incomplete or failed results.
+The default `--remote-layout split` planner emits the five standard targets plus observed verified remote targets, using plan schema 3. The development branch's `--remote-layout host` mode instead emits only selected verified remote-host targets, using schema 4 with `remoteLayout`, `hostIds`, and an empty `sorting` object. It preserves custom items even when placed in the wrong source group: moving already filed items requires a separate user request. Names are matched exactly. Duplicate target names block affected moves and section creation for that name. It never deletes sections. The verifier checks observed pin order, metadata, protected placements, and each planned move; new/missing/duplicate identities produce incomplete or failed results.
+
+## Top-level Remote sections (development branch)
+
+`plan --remote-layout host` groups each verified physical remote host into one native section named `Remote · {display} [{hostId}]` or `远程 · {display} [{hostId}]`. The stable native host suffix distinguishes identical display names. These sections are peers of Projects and Recents; project nodes remain projects inside their section, and chats retain their existing `projectId`. Eligible chats with no project are flat members of the same host section. The native contract used here exposes no nested-section operation.
+
+Use repeated `--host-id NATIVE_HOST_ID` to restrict the run. Omitting that option selects all remote hosts corroborated by native `local`/`remote` project records with nonlocal, nonsynthetic host IDs. An SSH alias, CLI UUID, or remote working directory is not desktop identity evidence. If native host/project records are missing, first complete [desktop SSH setup](https://learn.chatgpt.com/docs/remote-connections#connect-to-an-ssh-host) in Settings > Connections and choose a remote project folder. This planner neither connects hosts nor imports CLI sessions.
+
+Only eligible default-section items can move. Pins, chats with a project, manual groups, and existing split remote groups remain untouched. Missing target groups are created only when at least one planned move requires them. No local, cloud, or unknown-source target is added. `sorting: {}` means the agent must preserve every sidebar preference, without calling `update_sidebar_preferences`. See [the complete Remote procedure](remote-sidebar.md) for execution and acceptance checks.
 
 ## Coverage and execution
 
