@@ -102,6 +102,8 @@ Each command targets one host. Remote groups stay on the local machine, scoped b
 
 For MFA such as Duo, authenticate in your own terminal first, then reuse the connection with `--ssh-control-path PATH`. See [SSH usage](plugins/sidebar-organizer/skills/organize-sidebar/references/cli.md#remote-sessions-over-ssh) for commands to create and close a private socket.
 
+Future design notes distinguish VPN access, standalone campus servers, and HPC compute nodes: [remote access scenarios (Chinese)](docs/REMOTE_ACCESS_NOTES.md).
+
 ## Behavior
 
 - Creates/reuses Local Projects, ChatGPT Cloud Projects, Local Chats, ChatGPT Cloud Chats, and Source Unconfirmed sections, with separate verified remote-host sections when applicable.

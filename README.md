@@ -146,6 +146,8 @@ python3 scripts/session_cli.py --host devbox resume SESSION_ID --dry-run
 
 需要 MFA（如 Duo）时，先在自己的终端完成 SSH 认证，再用 `--ssh-control-path PATH` 复用已认证的连接；私有 socket 的创建和关闭命令见 [SSH 使用说明](plugins/sidebar-organizer/skills/organize-sidebar/references/cli.md#remote-sessions-over-ssh)。
 
+VPN、校园独立服务器和 HPC 计算节点的不同需求记录在[远程访问场景备忘](docs/REMOTE_ACCESS_NOTES.md)，供后续设计参考。
+
 ## 0.1.3：刷新核对与后台检查
 
 可主动重新读取侧边栏，或者明确要求后通过 Codex 原生自动化每小时核对一次。重复设置会查找并复用已有任务；安装插件本身不会开启后台任务。检查只读取元数据，不建立分组、不移动或删除聊天。无变化保持安静，有新的待核对引用或来源异常时才提醒。
